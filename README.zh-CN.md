@@ -135,12 +135,12 @@ Claude Code 和 Codex 会按版本号缓存插件，更新完要重启客户端�
 
 ## 支持的工具与模型
 
-| 客户端                       | 模型家族                 | 内置模型简写                                                   |
-| ---------------------------- | ------------------------ | -------------------------------------------------------------- |
-| **Antigravity** (`agy`)      | Google · Gemini & Claude | `flash`, `carbon`, `argon`, `hydrogen`, `opus`, `sonnet`       |
-| **Codex** (`codex`)          | OpenAI · GPT             | `sol`, `terra`, `astra`, `luna`                                |
-| **Claude Code** (`claude`)   | Anthropic · Claude       | `sonnet`, `opus`, `haiku`, `fable`                             |
-| **DeepSeek Harness** (`dsh`) | DeepSeek 及自定义提供商  | `v4.1-flash` / `flash`, `v4-pro` / `pro`, `<provider>/<model>` |
+| 客户端                       | 模型家族                 | 内置模型简写                                                     |
+| ---------------------------- | ------------------------ | ---------------------------------------------------------------- |
+| **Antigravity** (`agy`)      | Google · Gemini & Claude | `flash`, `neon`, `carbon`, `argon`, `hydrogen`, `opus`, `sonnet` |
+| **Codex** (`codex`)          | OpenAI · GPT             | `sol`, `terra`, `astra`, `luna`                                  |
+| **Claude Code** (`claude`)   | Anthropic · Claude       | `sonnet`, `opus`, `haiku`, `fable`                               |
+| **DeepSeek Harness** (`dsh`) | DeepSeek 及自定义提供商  | `v4.1-flash` / `flash`, `v4-pro` / `pro`, `<provider>/<model>`   |
 
 _后续还会陆续接入更多工具——Cospan 的驱动层设计得比较轻量，接入新的编程 Agent CLI 很方便。_
 

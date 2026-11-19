@@ -3,6 +3,7 @@ import { excerpt } from '../observation.mjs';
 import { BUILTIN_CONFIG, loadEffectiveConfig } from '../targets.mjs';
 
 const EFFORT_FAMILIES = new Set([
+  'gemini-4-neon',
   'gemini-4-hydrogen',
   'gemini-4-carbon',
   'gemini-4-argon',
@@ -14,7 +15,7 @@ const EFFORT_FAMILIES = new Set([
   'claude-sonnet-5-5',
 ]);
 
-const XHIGH_EFFORT_FAMILIES = new Set(['gemini-4-hydrogen']);
+const XHIGH_EFFORT_FAMILIES = new Set(['gemini-4-neon', 'gemini-4-hydrogen']);
 const SUPPORTED_FAMILY_EFFORTS = ['low', 'medium', 'high'];
 const MAX_ERROR_LINE = 64 * 1024;
 const MAX_ERRORS = 3;

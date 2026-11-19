@@ -4,7 +4,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 
 export const TARGET_MODEL_SHORTCUTS = {
-  agy: ['flash', 'carbon', 'argon', 'hydrogen', 'opus', 'sonnet'],
+  agy: ['flash', 'neon', 'carbon', 'argon', 'hydrogen', 'opus', 'sonnet'],
   codex: ['sol', 'terra', 'astra', 'luna'],
   claude: ['sonnet', 'opus', 'haiku', 'fable'],
   dsh: ['flash', 'pro', 'v4.1-flash', 'v4-pro'],
@@ -43,6 +43,8 @@ export const BUILTIN_CONFIG = {
     agy: {
       'gemini-3.8-flash': 'gemini-3.8-flash-medium',
       flash: 'gemini-3.8-flash-medium',
+      'gemini-4-neon': 'gemini-4-neon-medium',
+      neon: 'gemini-4-neon-medium',
       'gemini-4-carbon': 'gemini-4-carbon-medium',
       carbon: 'gemini-4-carbon-medium',
       'gemini-4-argon': 'gemini-4-argon-medium',

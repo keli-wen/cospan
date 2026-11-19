@@ -1,6 +1,6 @@
 ---
 name: agy
-description: Point-to-point headless delegation to Google Antigravity (`agy`) via cospan ($cospan:agy). Delegate repository-wide research, multimodal/large-context analysis, code review, or implementation tasks to Google Antigravity CLI. Model shortcuts include `flash`, `carbon`, `argon`, `hydrogen`, `opus`, `sonnet`.
+description: Point-to-point headless delegation to Google Antigravity (`agy`) via cospan ($cospan:agy). Delegate repository-wide research, multimodal/large-context analysis, code review, or implementation tasks to Google Antigravity CLI. Model shortcuts include `flash`, `neon`, `carbon`, `argon`, `hydrogen`, `opus`, `sonnet`.
 ---
 
 # $cospan:agy — Delegate to Google Antigravity (`agy`)
@@ -19,7 +19,7 @@ Always prefer the bundled `cospan` MCP tools over raw shell command calls—they
    - `readonly`: `true` for read-only inspection/review, `false` (default) when file edits are allowed
    - `restricted` *(optional)*: `true` to opt into strict OS sandboxing (defaults to `unrestricted`)
    - `model` *(optional)* / `effort` *(optional)* / `raw` *(optional)* / `timeout` *(optional, e.g. `"60m"`)*
-   - **Models & effort (verbatim shortcut contract)**: pass user model shortcuts **verbatim** to `model` / `--model` (`flash`, `carbon`, `argon`, `hydrogen`, `opus`, `sonnet`), pass explicit full model IDs or `<provider>/<model>` verbatim when specified, or omit `model` / `--model` when unspecified so `cospan` uses effective target defaults (`~/.cospan/config.json` and `<workspace>/.cospan/config.json` defaults). **Never guess or expand version numbers (such as `gpt-6.0-*`) or append effort suffixes (such as `-medium`) on the host side**—always pass reasoning effort separately via `effort` / `--effort` (supported `--effort`: `low`, `medium`, `high`, `xhigh` (`xhigh` on `hydrogen`)) and let `cospan` resolve shortcuts deterministically at runtime.
+   - **Models & effort (verbatim shortcut contract)**: pass user model shortcuts **verbatim** to `model` / `--model` (`flash`, `neon`, `carbon`, `argon`, `hydrogen`, `opus`, `sonnet`), pass explicit full model IDs or `<provider>/<model>` verbatim when specified, or omit `model` / `--model` when unspecified so `cospan` uses effective target defaults (`~/.cospan/config.json` and `<workspace>/.cospan/config.json` defaults). **Never guess or expand version numbers (such as `gpt-6.0-*`) or append effort suffixes (such as `-medium`) on the host side**—always pass reasoning effort separately via `effort` / `--effort` (supported `--effort`: `low`, `medium`, `high`, `xhigh` (`xhigh` on `neon`, `hydrogen`)) and let `cospan` resolve shortcuts deterministically at runtime.
 
 2. **Collect (`cospan_wait`):**
    Call MCP tool `cospan_wait` with `{ "cwd": "<workspace>", "id": "<job_id>", "timeout": "20m" }`.

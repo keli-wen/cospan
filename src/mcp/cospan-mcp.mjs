@@ -32,7 +32,7 @@ function resolvePackageVersion() {
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
     if (typeof pkg?.version === 'string' && pkg.version.trim()) return pkg.version.trim();
   } catch {}
-  return '0.1.0';
+  return '0.1.1';
 }
 
 const COSPAN_BIN = resolveCospanBin();

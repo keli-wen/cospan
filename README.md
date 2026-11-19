@@ -136,12 +136,12 @@ Claude Code and Codex cache plugins by version and require a restart after upgra
 
 ## Harnesses
 
-| Harness                      | Ecosystem                   | Built-in model shortcuts                                       |
-| ---------------------------- | --------------------------- | -------------------------------------------------------------- |
-| **Antigravity** (`agy`)      | Google · Gemini & Claude    | `flash`, `carbon`, `argon`, `hydrogen`, `opus`, `sonnet`       |
-| **Codex** (`codex`)          | OpenAI · GPT                | `sol`, `terra`, `astra`, `luna`                                |
-| **Claude Code** (`claude`)   | Anthropic · Claude          | `sonnet`, `opus`, `haiku`, `fable`                             |
-| **DeepSeek Harness** (`dsh`) | DeepSeek & custom providers | `v4.1-flash` / `flash`, `v4-pro` / `pro`, `<provider>/<model>` |
+| Harness                      | Ecosystem                   | Built-in model shortcuts                                         |
+| ---------------------------- | --------------------------- | ---------------------------------------------------------------- |
+| **Antigravity** (`agy`)      | Google · Gemini & Claude    | `flash`, `neon`, `carbon`, `argon`, `hydrogen`, `opus`, `sonnet` |
+| **Codex** (`codex`)          | OpenAI · GPT                | `sol`, `terra`, `astra`, `luna`                                  |
+| **Claude Code** (`claude`)   | Anthropic · Claude          | `sonnet`, `opus`, `haiku`, `fable`                               |
+| **DeepSeek Harness** (`dsh`) | DeepSeek & custom providers | `v4.1-flash` / `flash`, `v4-pro` / `pro`, `<provider>/<model>`   |
 
 _More harnesses are on the way—Cospan's driver layer is designed to plug in additional coding agent CLIs cleanly._
 

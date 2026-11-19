@@ -91,7 +91,7 @@ test('checkForUpdate uses HTTP server, respects TTL cache, and handles opt-out',
     assert.equal(disabled.reason, 'disabled');
 
     const notice1 = consumeCachedUpdateNotice({ cachePath, cooldownMs: 60_000 });
-    assert.match(notice1, /update available: 0\.1\.0 -> 0\.2\.0/);
+    assert.ok(notice1.includes(`update available: ${PACKAGE_VERSION} -> 0.2.0`));
     const notice2 = consumeCachedUpdateNotice({ cachePath, cooldownMs: 60_000 });
     assert.equal(notice2, null);
   } finally {
@@ -162,7 +162,7 @@ test('doctor, send, and MCP surface update notices and stale legacy config overr
     assert.equal(send1.status, 0, send1.stderr);
     const send1Id = JSON.parse(send1.stdout).job_id;
     assert.ok(send1Id);
-    assert.match(send1.stderr, /\[cospan\] update available: 0\.1\.0 -> 0\.2\.0/);
+    assert.ok(send1.stderr.includes(`[cospan] update available: ${PACKAGE_VERSION} -> 0.2.0`));
 
     const send2 = await runCospanAsync(
       ['send', '--to', 'agy', '--readonly', '--prompt', 'hello again', '--json'],
@@ -212,7 +212,11 @@ test('doctor, send, and MCP surface update notices and stale legacy config overr
       assert.equal(call.result.isError, false);
       mcpJobId = JSON.parse(call.result.content[0].text).job_id;
       assert.ok(mcpJobId);
-      assert.match(call.result.content[1]?.text || '', /update available: 0\.1\.0 -> 0\.2\.0/);
+      assert.ok(
+        (call.result.content[1]?.text || '').includes(
+          `update available: ${PACKAGE_VERSION} -> 0.2.0`
+        )
+      );
     } finally {
       mcp.kill('SIGTERM');
     }

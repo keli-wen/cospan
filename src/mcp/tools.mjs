@@ -5,7 +5,7 @@ const TARGET_ENUM = ['agy', 'codex', 'claude', 'dsh'];
 const EFFORT_ENUM = ['low', 'medium', 'high', 'xhigh', 'max'];
 const MODEL_PARAM_DESC =
   'Optional model shortcut (pass verbatim, e.g. sol/terra/astra/luna, ' +
-  'flash/carbon/argon/hydrogen/opus/sonnet, haiku/fable, pro/v4.1-flash/v4-pro), ' +
+  'flash/neon/carbon/argon/hydrogen/opus/sonnet, haiku/fable, pro/v4.1-flash/v4-pro), ' +
   'explicit full model ID, or <provider>/<model>. Omit when unspecified to use cospan ' +
   'effective defaults; never guess version numbers or append effort suffixes.';
 const EFFORT_PARAM_DESC =

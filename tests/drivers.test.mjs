@@ -122,6 +122,22 @@ test('agy model resolution: gemini-3.8-flash-medium default, mappings, and overr
   );
 });
 
+test('agy neon model resolution: medium default and low|medium|high|xhigh tiers', () => {
+  const emptyCfg = { defaults: {}, mappings: {} };
+  const resolve = (model, effort, config = BUILTIN_CONFIG) =>
+    resolveAgyModel({ kind: 'send', model, effort, config });
+  assert.equal(resolve('neon'), 'gemini-4-neon-medium');
+  assert.equal(resolve('gemini-4-neon', undefined, emptyCfg), 'gemini-4-neon-medium');
+  assert.equal(resolve('neon', 'low'), 'gemini-4-neon-low');
+  assert.equal(resolve('neon', 'high'), 'gemini-4-neon-high');
+  assert.equal(resolve('neon', 'xhigh'), 'gemini-4-neon-xhigh');
+  assert.equal(resolve('neon', 'max'), 'gemini-4-neon-xhigh');
+  assert.equal(resolve('gemini-4-neon-xhigh', 'medium', emptyCfg), 'gemini-4-neon-medium');
+  const neonDefaultCfg = { defaults: { agy: { model: 'gemini-4-neon-high' } }, mappings: {} };
+  assert.equal(resolve(undefined, undefined, neonDefaultCfg), 'gemini-4-neon-high');
+  assert.equal(resolve(undefined, 'low', neonDefaultCfg), 'gemini-4-neon-low');
+});
+
 test('agy invocation flags: unrestricted default vs restricted sandbox', () => {
   const rw = agyDriver.buildInvocation({
     kind: 'send',

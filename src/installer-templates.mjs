@@ -32,7 +32,8 @@ const TARGET_DOCS = {
   agy: {
     title: 'Google Antigravity (`agy`)',
     defaultNote: '`~/.cospan/config.json` and `<workspace>/.cospan/config.json` defaults',
-    effortsNote: 'supported `--effort`: `low`, `medium`, `high`, `xhigh` (`xhigh` on `hydrogen`)',
+    effortsNote:
+      'supported `--effort`: `low`, `medium`, `high`, `xhigh` (`xhigh` on `neon`, `hydrogen`)',
     strengths:
       'Delegate repository-wide research, multimodal/large-context analysis, code review, ' +
       'or implementation tasks to Google Antigravity CLI.',

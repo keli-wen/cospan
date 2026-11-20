@@ -214,7 +214,7 @@ test('host installer mounts all detected targets and adheres to host schemas', a
     assert.equal(typeof workspaceStateDir, 'function');
     assert.equal(typeof main, 'function');
   } finally {
-    fs.rmSync(tmp, { recursive: true, force: true });
+    fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   }
 });
 
@@ -262,6 +262,7 @@ test('stdio MCP server handles initialize, tools/list, cospan_send, and cospan_w
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 
+  const childClosed = new Promise((resolve) => child.once('close', resolve));
   const pending = new Map();
   let buf = '';
   child.stdout.on('data', (chunk) => {
@@ -336,8 +337,11 @@ test('stdio MCP server handles initialize, tools/list, cospan_send, and cospan_w
       else process.env.COSPAN_HOME = prevHome;
     }
   } finally {
-    child.kill('SIGTERM');
-    fs.rmSync(repo, { recursive: true, force: true });
-    fs.rmSync(`${repo}-cfg`, { recursive: true, force: true });
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGTERM');
+    }
+    await Promise.race([childClosed, new Promise((r) => setTimeout(r, 3000))]);
+    fs.rmSync(repo, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    fs.rmSync(`${repo}-cfg`, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   }
 });

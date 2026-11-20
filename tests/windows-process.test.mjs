@@ -99,7 +99,7 @@ test('repoRoot() memoizes and normalizes paths without re-spawning git rev-parse
 
     const first = repoRoot(sub1);
     assert.equal(first, path.normalize(first), 'repoRoot should return a normalized path');
-    assert.equal(fs.realpathSync(first), fs.realpathSync(repo));
+    assert.equal(fs.realpathSync.native(first), fs.realpathSync.native(repo));
     assert.notEqual(first, path.resolve(sub1));
 
     // Disable .git so any uncached git rev-parse falls back to path.resolve(dir).

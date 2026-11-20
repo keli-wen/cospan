@@ -99,10 +99,14 @@ export function globalConfigFilePath() {
   return path.join(cospanHomeDir(), 'config.json');
 }
 
+export function realpathNative(targetPath) {
+  return (fs.realpathSync.native || fs.realpathSync)(targetPath);
+}
+
 export function workspaceTrajectoryDir(workspaceRoot) {
   let canonical = workspaceRoot || process.cwd();
   try {
-    canonical = fs.realpathSync(canonical);
+    canonical = realpathNative(canonical);
   } catch {}
   const baseSlug =
     (path.basename(canonical) || 'workspace')

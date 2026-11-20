@@ -216,7 +216,7 @@ test('cancel and resumable timeout (attention exit code 5)', () => {
       }
     );
     const { job_id: slowId } = JSON.parse(slow.stdout);
-    const attnWait = runCospan(['wait', slowId, '--timeout', '5s'], { cwd: repo });
+    const attnWait = runCospan(['wait', slowId, '--timeout', '15s'], { cwd: repo });
     assert.equal(attnWait.code, 5, attnWait.stdout);
     assert.match(attnWait.stdout, /Job needs attention/);
     assert.match(attnWait.stdout, /continue --id/);

@@ -31,8 +31,14 @@ function parseSkillMarkdown(raw, fallbackName) {
   };
 }
 
+function normalizeSkillPath(p) {
+  return String(p || '').replaceAll('\\', '/');
+}
+
 function hydrateSkillBody(body, skillDir) {
-  return body.replaceAll('<skill-dir>', skillDir || '').replaceAll('<plugin-root>', REPO_ROOT);
+  return body
+    .replaceAll('<skill-dir>', normalizeSkillPath(skillDir))
+    .replaceAll('<plugin-root>', normalizeSkillPath(REPO_ROOT));
 }
 
 function loadSkillCandidates() {

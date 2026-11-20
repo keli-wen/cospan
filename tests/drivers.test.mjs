@@ -147,6 +147,8 @@ test('agy invocation flags: unrestricted default vs restricted sandbox', () => {
     workspace: '/repo',
     readonly: false,
   });
+  assert.ok(!rw.args.includes('-p'));
+  assert.equal(rw.stdinText, 'fix bug');
   assert.ok(rw.args.includes('--dangerously-skip-permissions'));
   assert.ok(!rw.args.includes('--sandbox'));
   assert.ok(!rw.args.includes('--mode'));
@@ -160,6 +162,8 @@ test('agy invocation flags: unrestricted default vs restricted sandbox', () => {
     readonly: true,
     conversationId: 'conv-1',
   });
+  assert.ok(!ro.args.includes('-p'));
+  assert.equal(ro.stdinText, 'review diff');
   assert.ok(ro.args.includes('--mode'));
   assert.equal(ro.args[ro.args.indexOf('--mode') + 1], 'plan');
   assert.ok(ro.args.includes('--dangerously-skip-permissions'));
@@ -172,6 +176,8 @@ test('agy invocation flags: unrestricted default vs restricted sandbox', () => {
     timeout: '2m',
     workspace: '/repo',
   });
+  assert.ok(!askUnrestricted.args.includes('-p'));
+  assert.equal(askUnrestricted.stdinText, 'ping');
   assert.ok(askUnrestricted.args.includes('--dangerously-skip-permissions'));
   assert.equal(askUnrestricted.args[askUnrestricted.args.indexOf('--output-format') + 1], 'json');
 
@@ -184,6 +190,7 @@ test('agy invocation flags: unrestricted default vs restricted sandbox', () => {
     readonly: false,
     permissions: 'restricted',
   });
+  assert.equal(restricted.stdinText, 'sandboxed task');
   assert.ok(!restricted.args.includes('--dangerously-skip-permissions'));
   assert.ok(restricted.args.includes('--sandbox'));
 });

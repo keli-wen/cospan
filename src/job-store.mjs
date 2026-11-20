@@ -38,11 +38,19 @@ function lockDirPath(root = repoRoot()) {
 }
 
 export function loadState(root = repoRoot()) {
+  const file = stateFilePath(root);
+  let raw;
   try {
-    return JSON.parse(readTextRetry(stateFilePath(root)));
-  } catch {
-    return { jobs: [], sessions: {} };
+    raw = readTextRetry(file);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return { jobs: [], sessions: {} };
+    throw error;
   }
+  const parsed = JSON.parse(raw);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`Invalid cospan state file: ${file}`);
+  }
+  return parsed;
 }
 
 export function pidAlive(pid) {
@@ -57,10 +65,12 @@ export function pidAlive(pid) {
 
 export function liveJobStatus(job) {
   if (TERMINAL_STATUSES.has(job.status)) return job.status;
-  try {
-    const final = JSON.parse(fs.readFileSync(job.result_file + '.status.json', 'utf8'));
-    if (TERMINAL_STATUSES.has(final.status)) return final.status;
-  } catch {}
+  if (job.result_file) {
+    try {
+      const final = JSON.parse(readTextRetry(job.result_file + '.status.json'));
+      if (TERMINAL_STATUSES.has(final.status)) return final.status;
+    } catch {}
+  }
   if (pidAlive(job.pid)) return 'running';
   return !job.spec_file && fs.existsSync(job.result_file) ? 'done' : 'crashed';
 }

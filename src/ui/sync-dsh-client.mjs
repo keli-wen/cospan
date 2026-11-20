@@ -14,10 +14,14 @@ function escapeTemplateLiteral(raw) {
   return raw.replaceAll('\\', '\\\\').replaceAll('`', '\\`').replaceAll('${', '\\${');
 }
 
+function normalizeLf(raw) {
+  return raw.replace(/\r\n/g, '\n');
+}
+
 function indentJsBlock(rawJs, spaces = 4) {
   const pad = ' '.repeat(spaces);
-  const cleaned = rawJs
-    .replace(/^\/\* global [^\n]*\*\/\r?\n/, '')
+  const cleaned = normalizeLf(rawJs)
+    .replace(/^\/\* global [^\n]*\*\/\n/, '')
     .replace(/\n*if \(typeof globalThis !== 'undefined'\) \{\n[\s\S]*?\}\s*$/, '')
     .trimEnd();
   const indented = cleaned
@@ -28,9 +32,9 @@ function indentJsBlock(rawJs, spaces = 4) {
 }
 
 export function buildDshClientBundle() {
-  const css = fs.readFileSync(BOARD_CSS_PATH, 'utf8').trim();
-  const boardJs = fs.readFileSync(BOARD_JS_PATH, 'utf8');
-  const bridge = fs.readFileSync(DSH_BRIDGE_PATH, 'utf8');
+  const css = normalizeLf(fs.readFileSync(BOARD_CSS_PATH, 'utf8')).trim();
+  const boardJs = normalizeLf(fs.readFileSync(BOARD_JS_PATH, 'utf8'));
+  const bridge = normalizeLf(fs.readFileSync(DSH_BRIDGE_PATH, 'utf8'));
 
   const cssMarker = "'__COSPAN_BOARD_CSS_PLACEHOLDER__'";
   if (!bridge.includes(cssMarker)) {

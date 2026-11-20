@@ -45,6 +45,7 @@ function pingTarget(targetId, binary, config) {
     const child = spawn(spawnCmd.cmd, spawnCmd.args, {
       cwd: inv.cwd || workspace,
       windowsHide: true,
+      windowsVerbatimArguments: Boolean(spawnCmd.windowsVerbatimArguments),
       stdio: [inv.stdinText !== null ? 'pipe' : 'ignore', 'pipe', 'pipe'],
     });
     let stdout = '';

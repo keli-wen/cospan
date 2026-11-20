@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import {
+  buildSpawnCommand,
   BUILTIN_CONFIG,
   loadEffectiveConfig,
   resolveTargetBinary,
@@ -193,10 +194,12 @@ function probeDshProfileDefaultModel(dshHome) {
   const binary = resolveTargetBinary('dsh');
   if (!binary || /\.(mjs|cjs|js)$/i.test(binary)) return null;
   if (!fs.existsSync(path.join(dshHome, 'profiles', 'headless'))) return null;
-  const res = spawnSync(binary, ['--profile', 'headless', '--dump-config'], {
+  const spawnCmd = buildSpawnCommand(binary, ['--profile', 'headless', '--dump-config']);
+  const res = spawnSync(spawnCmd.cmd, spawnCmd.args, {
     encoding: 'utf8',
     timeout: 5000,
     windowsHide: true,
+    windowsVerbatimArguments: Boolean(spawnCmd.windowsVerbatimArguments),
   });
   if (res.error || res.status !== 0) return null;
   return extractDshAgentDefaultModelFromText(res.stdout);

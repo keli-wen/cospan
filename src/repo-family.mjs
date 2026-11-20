@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { cospanHomeDir, workspaceTrajectoryDir } from './config.mjs';
+import { cospanHomeDir, realpathNative, workspaceTrajectoryDir } from './config.mjs';
 import { sh } from './envelope.mjs';
+import { readTextRetry, replaceFile } from './state-lock.mjs';
 
 const WORKTREE_CACHE_TTL_MS = 10000;
 const commonDirCache = new Map();
@@ -12,7 +13,7 @@ const registeredTrajectories = new Map();
 function canonicalizeExistingPath(targetPath) {
   const normalized = path.normalize(path.resolve(targetPath));
   try {
-    return fs.realpathSync(normalized);
+    return realpathNative(normalized);
   } catch {
     return normalized;
   }
@@ -38,7 +39,7 @@ export function repoIndexFilePath(commonDir) {
 
 function readRepoIndex(filePath) {
   try {
-    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    const parsed = JSON.parse(readTextRetry(filePath));
     if (parsed && Array.isArray(parsed.trajectories)) return parsed;
   } catch {}
   return { common_git_dir: null, trajectories: [] };
@@ -76,7 +77,7 @@ export function registerRepoTrajectory(workspaceRoot) {
     tmpFile,
     JSON.stringify({ common_git_dir: commonDir, trajectories: nextEntries }, null, 2) + '\n'
   );
-  fs.renameSync(tmpFile, indexFile);
+  replaceFile(tmpFile, indexFile);
   registeredTrajectories.set(trajDir, indexFile);
   return indexFile;
 }

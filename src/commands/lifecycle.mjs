@@ -6,6 +6,7 @@ import {
   findJob,
   liveJobStatus,
   loadState,
+  pidAlive,
   refreshJobs,
   repoRoot,
   updateState,
@@ -98,10 +99,10 @@ export function cmdStatus(opts) {
   }
 }
 
-function checkMatchingWorkerIdentity(targetJob) {
+function checkMatchingWorkerIdentity(targetJob, preChecked) {
   const identity = targetJob.worker_identity;
   if (!identity) return { ok: true };
-  const current = processIdentity(targetJob.pid);
+  const current = preChecked && preChecked.pid === targetJob.pid ? preChecked.identity : null;
   if (identity.pid !== targetJob.pid || (current && identity.born !== current.born)) {
     return {
       ok: false,
@@ -111,7 +112,16 @@ function checkMatchingWorkerIdentity(targetJob) {
   return { ok: true };
 }
 
-export function requestSafeJobCancellation(id, root) {
+export function requestSafeJobCancellation(
+  id,
+  root,
+  { getProcessIdentity = processIdentity } = {}
+) {
+  const preJob = (loadState(root).jobs || []).find((j) => j.id === id) || null;
+  const preChecked =
+    preJob?.worker_identity && liveJobStatus(preJob) === 'running'
+      ? { pid: preJob.pid, identity: getProcessIdentity(preJob.pid) }
+      : null;
   return updateState((state) => {
     const targetJob = state.jobs?.find((j) => j.id === id);
     if (!targetJob) {
@@ -129,7 +139,7 @@ export function requestSafeJobCancellation(id, root) {
     if (!targetJob.spec_file) {
       return { ok: false, status, error: 'job has no spec_file cancellation channel' };
     }
-    const idCheck = checkMatchingWorkerIdentity(targetJob);
+    const idCheck = checkMatchingWorkerIdentity(targetJob, preChecked);
     if (!idCheck.ok) {
       return { ok: false, status, error: idCheck.error };
     }
@@ -172,12 +182,13 @@ export async function cmdCancel(opts) {
 
   const deadline = Date.now() + 10000;
   while (Date.now() < deadline) {
-    const status = liveJobStatus(findJob(id, root));
-    if (status === 'canceled') {
+    const current = findJob(id, root);
+    const status = liveJobStatus(current);
+    if (status === 'canceled' && !pidAlive(current.pid)) {
       process.stdout.write(`Canceled job ${id} (pid ${res.job.pid}).\n`);
       return;
     }
-    if (status !== 'running') {
+    if (status !== 'running' && status !== 'canceled') {
       die(
         `Cancellation requested, but job transitioned to ${status}; ` +
           `inspect \`cospan observe ${id}\`.`

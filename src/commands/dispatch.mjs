@@ -86,6 +86,7 @@ function executeForegroundAsk(driver, binary, inv, workspace, timeout, timeoutMs
     timeout: timeoutMs + 15000,
     maxBuffer: 32 * 1024 * 1024,
     windowsHide: true,
+    windowsVerbatimArguments: Boolean(spawnCmd.windowsVerbatimArguments),
   });
   if (r.error) {
     if (r.error.code === 'ETIMEDOUT') die(`ask timed out after ${timeout}`);

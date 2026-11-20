@@ -3,9 +3,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { requestSafeJobCancellation, terminateVerifiedWorker } from './commands/lifecycle.mjs';
 import { diagnosticPacket, readTail } from './job-diagnostics.mjs';
-import { liveJobStatus, loadState, repoRoot } from './job-store.mjs';
+import { liveJobStatus, loadState, pidAlive, repoRoot } from './job-store.mjs';
 import { excerpt } from './observation.mjs';
 import { resolveFamilyTrajectories } from './repo-family.mjs';
+import { readTextRetry } from './state-lock.mjs';
 
 const PROMPT_PREVIEW_BYTES = 260;
 const PROMPT_DETAIL_BYTES = 4096;
@@ -36,7 +37,7 @@ export function resolveBoardWorkspace(workspaceInput) {
 function readJsonSafe(filePath) {
   if (!filePath) return null;
   try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    return JSON.parse(readTextRetry(filePath));
   } catch {
     return null;
   }
@@ -302,7 +303,7 @@ async function awaitJobTermination(workspace, targetId, waitMs) {
   while (Date.now() < deadline) {
     const current = (loadState(workspace).jobs || []).find((j) => j.id === targetId);
     const status = current ? liveJobStatus(current) : 'canceled';
-    if (status !== 'running') {
+    if (status !== 'running' && !pidAlive(current?.pid)) {
       const msg =
         status === 'canceled' ? `Canceled job ${targetId}.` : `Job ${targetId} is ${status}.`;
       return { ok: true, job_id: targetId, status, message: msg };
@@ -318,7 +319,13 @@ async function awaitJobTermination(workspace, targetId, waitMs) {
   };
 }
 
-export async function cancelBoardJob(workspaceInput, jobId, { waitMs = 2500 } = {}) {
+const DEFAULT_CANCEL_WAIT_MS = process.platform === 'win32' ? 10000 : 2500;
+
+export async function cancelBoardJob(
+  workspaceInput,
+  jobId,
+  { waitMs = DEFAULT_CANCEL_WAIT_MS } = {}
+) {
   const workspace = resolveBoardWorkspace(workspaceInput);
   const targetId = typeof jobId === 'string' ? jobId.trim() : '';
   if (!targetId) {

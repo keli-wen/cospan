@@ -107,7 +107,7 @@ test('sidebar-state queries board, caller attribution, legacy jobs, and safe can
 
     // Query via file:// URI
     const board = listWorkspaceBoard(pathToFileURL(repo).href, { callerSessionId: 'conv-alpha' });
-    assert.equal(board.workspace, fs.realpathSync(repo) === repo ? repo : board.workspace);
+    assert.equal(fs.realpathSync.native(board.workspace), fs.realpathSync.native(repo));
     assert.equal(board.caller_session_id, 'conv-alpha');
     assert.equal(board.jobs.length, 3);
     // Running job sorts first, then newest finished (doneId), then older legacy job

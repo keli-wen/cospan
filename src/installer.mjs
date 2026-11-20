@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import {
+  buildSpawnCommand,
   cospanHomeDir,
   discoverAllTargets,
   ensureDefaultGlobalConfig,
@@ -239,26 +240,32 @@ function copyMarketplaceMcpFiles({ packageRoot, marketPluginRoot, cospanBin, use
   }
 }
 
+function runCodexPluginCmd(codexBin, subArgs, timeout) {
+  const spawnCmd = buildSpawnCommand(codexBin, subArgs);
+  return spawnSync(spawnCmd.cmd, spawnCmd.args, {
+    encoding: 'utf8',
+    timeout,
+    windowsHide: true,
+    windowsVerbatimArguments: Boolean(spawnCmd.windowsVerbatimArguments),
+  });
+}
+
 function registerCodexLocalMarketplace(codexBin, marketplaceRoot) {
   const registration = { attempted: true, ok: false, details: [] };
-  spawnSync(codexBin, ['--enable', 'plugins', 'plugin', 'remove', 'cospan@cospan-local'], {
-    encoding: 'utf8',
-    timeout: 10000,
-    windowsHide: true,
-  });
-  spawnSync(codexBin, ['--enable', 'plugins', 'plugin', 'marketplace', 'remove', 'cospan-local'], {
-    encoding: 'utf8',
-    timeout: 10000,
-    windowsHide: true,
-  });
-  const mAdd = spawnSync(
+  runCodexPluginCmd(
+    codexBin,
+    ['--enable', 'plugins', 'plugin', 'remove', 'cospan@cospan-local'],
+    10000
+  );
+  runCodexPluginCmd(
+    codexBin,
+    ['--enable', 'plugins', 'plugin', 'marketplace', 'remove', 'cospan-local'],
+    10000
+  );
+  const mAdd = runCodexPluginCmd(
     codexBin,
     ['--enable', 'plugins', 'plugin', 'marketplace', 'add', marketplaceRoot],
-    {
-      encoding: 'utf8',
-      timeout: 15000,
-      windowsHide: true,
-    }
+    15000
   );
   registration.details.push({
     step: 'marketplace_add',
@@ -266,14 +273,10 @@ function registerCodexLocalMarketplace(codexBin, marketplaceRoot) {
     stdout: (mAdd.stdout || '').trim(),
     stderr: (mAdd.stderr || '').trim(),
   });
-  const pAdd = spawnSync(
+  const pAdd = runCodexPluginCmd(
     codexBin,
     ['--enable', 'plugins', 'plugin', 'add', 'cospan@cospan-local'],
-    {
-      encoding: 'utf8',
-      timeout: 15000,
-      windowsHide: true,
-    }
+    15000
   );
   registration.details.push({
     step: 'plugin_add',

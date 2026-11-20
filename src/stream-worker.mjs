@@ -33,7 +33,7 @@ function createDescendantTracker(getChildPid) {
   const tracked = new Map();
   const track = () => {
     const rows = processTable();
-    if (!rows) return;
+    if (!rows) return null;
     for (const [pid, old] of tracked) {
       if (!rows.some((row) => row.pid === pid && row.born === old.born)) tracked.delete(pid);
     }
@@ -47,6 +47,7 @@ function createDescendantTracker(getChildPid) {
         if (row.pid !== root.pid && row.group === root.pid) tracked.set(row.pid, row);
       }
     }
+    return rows;
   };
   return {
     track,
@@ -159,12 +160,13 @@ function evaluateFinalizedStream({
   };
 }
 
-function spawnTargetChild(binary, args, { cwd, env, stdinText }) {
+function spawnTargetChild(binary, args, { cwd, env, stdinText, windowsVerbatimArguments = false }) {
   const child = spawn(binary, args, {
     cwd,
     env,
     detached: process.platform !== 'win32',
     windowsHide: true,
+    windowsVerbatimArguments: Boolean(windowsVerbatimArguments),
     stdio: [stdinText !== null ? 'pipe' : 'ignore', 'pipe', 'pipe'],
   });
   if (stdinText !== null && child.stdin) {
@@ -182,7 +184,7 @@ function createStreamLifecycle({ job, driver, session, procTracker, state }) {
       boundSnapshot({ job_id: job.id, target: driver.id, ...session.snapshot() })
     );
   };
-  const cleanup = async () => {
+  const cleanup = async (initialRows = null) => {
     if (
       !procTracker.getRoot() &&
       state.child?.exitCode === null &&
@@ -190,7 +192,13 @@ function createStreamLifecycle({ job, driver, session, procTracker, state }) {
     ) {
       state.child.kill('SIGTERM');
     }
-    await stopExecution(procTracker.getRoot(), procTracker.getKnown());
+    let rows = initialRows;
+    const table = () => {
+      const first = rows;
+      rows = null;
+      return first || processTable();
+    };
+    await stopExecution(procTracker.getRoot(), procTracker.getKnown(), table);
     if (state.child?.exitCode === null && state.child.signalCode === null)
       state.child.kill('SIGKILL');
   };
@@ -199,8 +207,7 @@ function createStreamLifecycle({ job, driver, session, procTracker, state }) {
     if (state.stopping) return;
     state.reason = why;
     clearInterval(state.trackingTimer);
-    procTracker.track();
-    state.stopping = cleanup();
+    state.stopping = cleanup(procTracker.track());
   };
   const safely = (action) => {
     try {
@@ -216,7 +223,7 @@ function createStreamLifecycle({ job, driver, session, procTracker, state }) {
 function wireChildOutputPipes({ child, rawFd, session, procTracker, state, publish, safely }) {
   const parser = createParser(
     (event) => {
-      if (session.acceptEvent(event)) procTracker.track();
+      if (session.acceptEvent(event) && state.child?.exitCode === null) procTracker.track();
       if (Date.now() - state.lastPublish >= 100) publish();
       else if (!state.publishTimer) {
         state.publishTimer = setTimeout(() => {
@@ -277,7 +284,12 @@ function observeChildLifecycle(child, state) {
 function startChildTracking(opts, ctx, hardDeadline) {
   const { binary, args, stdinText = null, cwd, env = process.env, update, signal } = opts;
   const { state, procTracker, abort, stop } = ctx;
-  state.child = spawnTargetChild(binary, args, { cwd, env, stdinText });
+  state.child = spawnTargetChild(binary, args, {
+    cwd,
+    env,
+    stdinText,
+    windowsVerbatimArguments: opts.windowsVerbatimArguments,
+  });
   const lifecycle = observeChildLifecycle(state.child, state);
   procTracker.track();
   state.trackingTimer = setInterval(procTracker.track, process.platform === 'win32' ? 5000 : 1000);
@@ -299,10 +311,7 @@ async function finishChildExecution(opts, ctx, { exited, closed, parser }) {
   state.exitCode = outcome.exit;
   clearTimeout(state.deadline);
   clearInterval(state.trackingTimer);
-  if (!state.stopping) {
-    procTracker.track();
-    state.stopping = cleanup();
-  }
+  if (!state.stopping) state.stopping = cleanup(procTracker.track());
   await state.stopping;
   await drainChildStreams(state.child, closed, session, driver.displayName);
   safely(() => parser.end());

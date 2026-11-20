@@ -8,6 +8,7 @@ import {
   MAX_BACKGROUND_MS,
 } from './cli-args.mjs';
 import { findJob, liveJobStatus, repoRoot } from './job-store.mjs';
+import { readTextRetry } from './state-lock.mjs';
 
 export const CRASH_SANDBOX_HINT =
   'The worker pid is not visible from this process. If the job was started from an ' +
@@ -110,7 +111,7 @@ export function readObservation(job) {
     warnings: ['No activity record is available for this job yet.'],
   };
   try {
-    snapshot = JSON.parse(fs.readFileSync(job.progress_file, 'utf8'));
+    snapshot = JSON.parse(readTextRetry(job.progress_file));
   } catch {}
   return boundSnapshot({
     ...snapshot,
@@ -162,7 +163,7 @@ function attachNonDoneObservationFields(snapshot, job, final, status) {
 export function readTerminalObservation(job, status) {
   let final = {};
   try {
-    final = JSON.parse(fs.readFileSync(job.result_file + '.status.json', 'utf8'));
+    final = JSON.parse(readTextRetry(job.result_file + '.status.json'));
   } catch {}
   const finishedAt = job.finished_at || final.finished_at || null;
   const native = final.native || job.native;
@@ -205,7 +206,7 @@ function writeStoredJobDeliverable(job, status) {
       (resumeCmd ? `<!-- interactive_resume: ${resumeCmd} -->\n` : '') +
       `\n`
   );
-  process.stdout.write(fs.readFileSync(job.result_file, 'utf8'));
+  process.stdout.write(readTextRetry(job.result_file));
 }
 
 function writeMissingResultDiagnostics(job, status) {
@@ -238,7 +239,7 @@ export function renderJobResponse(initial, { observeOnly = false } = {}) {
   }
   if (job.status === 'running') {
     try {
-      job = { ...job, ...JSON.parse(fs.readFileSync(job.result_file + '.status.json', 'utf8')) };
+      job = { ...job, ...JSON.parse(readTextRetry(job.result_file + '.status.json')) };
     } catch {}
   }
   if (fs.existsSync(job.result_file)) writeStoredJobDeliverable(job, status);

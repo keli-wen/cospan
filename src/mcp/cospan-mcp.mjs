@@ -7,6 +7,7 @@
  */
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -49,6 +50,7 @@ function triggerUpdateCheckOnce() {
   if (!process.env.COSPAN_UPDATE_URL && (process.env.NODE_TEST_CONTEXT || process.env.CI)) return;
   try {
     const child = spawn(process.execPath, [COSPAN_BIN, '_update_check'], {
+      cwd: os.tmpdir(),
       detached: true,
       stdio: 'ignore',
       windowsHide: true,

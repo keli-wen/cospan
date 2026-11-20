@@ -15,7 +15,7 @@ if (argv.includes('--help')) {
   process.exit(0);
 }
 
-let prompt = '';
+let prompt = null;
 let model = '';
 let format = 'text';
 let conversation = null;
@@ -35,6 +35,8 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--dangerously-skip-permissions') skipPerms = true;
   else if (a === '--sandbox') sandbox = true;
 }
+
+if (prompt === null) prompt = fs.readFileSync(0, 'utf8');
 
 const convId = conversation || 'agy-conv-12345';
 const delayMs = Number(process.env.FAKE_AGY_DELAY_MS || 0);

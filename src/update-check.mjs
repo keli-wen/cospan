@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -224,6 +225,7 @@ export function triggerBackgroundUpdateCheck({
   if (isCacheFresh(cache, resolveTtlMs(ttlMs))) return false;
   try {
     const child = spawn(process.execPath, [binPath, '_update_check'], {
+      cwd: os.tmpdir(),
       detached: true,
       stdio: 'ignore',
       windowsHide: true,

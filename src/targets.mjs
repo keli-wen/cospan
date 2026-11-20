@@ -46,8 +46,9 @@ const CANDIDATE_SPECS = {
     envVar: 'AGY_BIN',
     binName: 'agy',
     phase: 1,
-    fallbacks: [
-      path.join(os.homedir(), '.local', 'bin', 'agy'),
+    winProgramSubpath: ['Antigravity', 'bin', 'agy'],
+    posixFallbacks: (home) => [
+      path.join(home, '.local', 'bin', 'agy'),
       '/opt/homebrew/bin/agy',
       '/usr/local/bin/agy',
     ],
@@ -56,9 +57,10 @@ const CANDIDATE_SPECS = {
     envVar: 'CODEX_BIN',
     binName: 'codex',
     phase: 1,
-    fallbacks: [
+    winProgramSubpath: ['Codex', 'bin', 'codex'],
+    posixFallbacks: (home) => [
       '/opt/homebrew/bin/codex',
-      path.join(os.homedir(), '.local', 'bin', 'codex'),
+      path.join(home, '.local', 'bin', 'codex'),
       '/usr/local/bin/codex',
       '/Applications/Codex.app/Contents/Resources/codex',
     ],
@@ -67,9 +69,10 @@ const CANDIDATE_SPECS = {
     envVar: 'CLAUDE_BIN',
     binName: 'claude',
     phase: 1,
-    fallbacks: [
+    winProgramSubpath: ['claude', 'bin', 'claude'],
+    posixFallbacks: (home) => [
       '/opt/homebrew/bin/claude',
-      path.join(os.homedir(), '.local', 'bin', 'claude'),
+      path.join(home, '.local', 'bin', 'claude'),
       '/usr/local/bin/claude',
     ],
   },
@@ -77,9 +80,10 @@ const CANDIDATE_SPECS = {
     envVar: 'DSH_BIN',
     binName: 'dsh',
     phase: 1,
-    fallbacks: [
+    winProgramSubpath: ['DeepSeek Harness', 'resources', 'runtime', 'cli', 'bin', 'dsh'],
+    posixFallbacks: (home) => [
       '/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh',
-      path.join(os.homedir(), '.local', 'bin', 'dsh'),
+      path.join(home, '.local', 'bin', 'dsh'),
       '/opt/homebrew/bin/dsh',
     ],
   },
@@ -98,17 +102,36 @@ function isExecutableFile(filePath) {
   }
 }
 
+function resolveWithExts(stem, platform = process.platform) {
+  const exts = platform === 'win32' ? ['.exe', '.cmd', '.bat', ''] : [''];
+  for (const ext of exts) {
+    const full = stem + ext;
+    if (isExecutableFile(full)) return full;
+  }
+  return null;
+}
+
 function whichBinary(binName) {
   const pathEnv = process.env.PATH || '';
   const dirs = pathEnv.split(path.delimiter).filter(Boolean);
-  const exts = process.platform === 'win32' ? ['.exe', '.cmd', '.bat', ''] : [''];
-  for (const dir of dirs) {
-    for (const ext of exts) {
-      const full = path.join(dir, binName + ext);
-      if (isExecutableFile(full)) return full;
-    }
+  for (const rawDir of dirs) {
+    const dir = rawDir.replace(/^"|"$/g, '');
+    const found = resolveWithExts(path.join(dir, binName));
+    if (found) return found;
   }
   return null;
+}
+
+function fallbackCandidates(spec, platform = process.platform) {
+  const home = platform === 'win32' ? process.env.USERPROFILE || os.homedir() : os.homedir();
+  if (platform !== 'win32') return spec.posixFallbacks(home);
+  const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
+  const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
+  return [
+    path.join(appData, 'npm', spec.binName),
+    path.join(home, '.local', 'bin', spec.binName),
+    path.join(localAppData, 'Programs', ...spec.winProgramSubpath),
+  ];
 }
 
 export function resolveTargetBinary(targetId) {
@@ -124,24 +147,76 @@ export function resolveTargetBinary(targetId) {
   const fromPath = whichBinary(spec.binName);
   if (fromPath) return fromPath;
 
-  for (const candidate of spec.fallbacks) {
-    if (isExecutableFile(candidate)) return candidate;
+  for (const stem of fallbackCandidates(spec)) {
+    const found = resolveWithExts(stem);
+    if (found) return found;
   }
   return null;
 }
 
-export function buildSpawnCommand(binary, args) {
-  if (/\.(mjs|cjs|js)$/i.test(binary)) {
-    return { cmd: process.execPath, args: [binary, ...args] };
+function unwrapNodeCmdShim(binary) {
+  let fd;
+  try {
+    fd = fs.openSync(binary, 'r');
+    const buf = Buffer.alloc(4096);
+    const bytes = fs.readSync(fd, buf, 0, buf.length, 0);
+    const text = buf.subarray(0, bytes).toString('utf8');
+    if (!/node|%_prog%/i.test(text)) return null;
+    const match = /%(?:~)?dp0%[\\/]*([^"%*\r\n]+?\.(?:mjs|cjs|js))"?\s+%\*/i.exec(text);
+    if (!match) return null;
+    const rel = match[1].replaceAll('\\', '/').replace(/^\/+/, '');
+    const scriptPath = path.resolve(path.dirname(binary), rel);
+    return fs.existsSync(scriptPath) ? scriptPath : null;
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
   }
-  return { cmd: binary, args };
+}
+
+function quoteCmdArg(value) {
+  const str = String(value);
+  if (str.length === 0) return '""';
+  if (!/[\s"&|<>()^%!;,=]/.test(str)) return str;
+  const escaped = str.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, '$1$1');
+  return `"${escaped.replaceAll('%', '"^%"')}"`;
+}
+
+export function buildSpawnCommand(binary, args, platform = process.platform) {
+  if (/\.(mjs|cjs|js)$/i.test(binary)) {
+    return { cmd: process.execPath, args: [binary, ...args], windowsVerbatimArguments: false };
+  }
+  if (/\.(cmd|bat)$/i.test(binary)) {
+    const unwrapped = unwrapNodeCmdShim(binary);
+    if (unwrapped) {
+      return {
+        cmd: process.execPath,
+        args: [unwrapped, ...args],
+        windowsVerbatimArguments: false,
+      };
+    }
+    if (platform === 'win32') {
+      const cmdLine = [binary, ...args].map(quoteCmdArg).join(' ');
+      return {
+        cmd: process.env.ComSpec || 'cmd.exe',
+        args: ['/d', '/s', '/c', `"${cmdLine}"`],
+        windowsVerbatimArguments: true,
+      };
+    }
+  }
+  return { cmd: binary, args, windowsVerbatimArguments: false };
 }
 
 export function probeTargetVersion(binary) {
   if (!binary) return null;
   try {
-    const { cmd, args } = buildSpawnCommand(binary, ['--version']);
-    const r = spawnSync(cmd, args, { encoding: 'utf8', timeout: 3000, windowsHide: true });
+    const spawnCmd = buildSpawnCommand(binary, ['--version']);
+    const r = spawnSync(spawnCmd.cmd, spawnCmd.args, {
+      encoding: 'utf8',
+      timeout: 3000,
+      windowsHide: true,
+      windowsVerbatimArguments: Boolean(spawnCmd.windowsVerbatimArguments),
+    });
     if (r.error || r.status !== 0) return null;
     const text = `${r.stdout || ''}\n${r.stderr || ''}`.trim();
     return text.split('\n')[0]?.trim() || null;

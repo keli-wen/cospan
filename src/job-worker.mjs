@@ -40,7 +40,7 @@ function spawnDetachedWorkerProcess(id, cwd, logFile) {
     const child = spawn(process.execPath, [COSPAN_BIN_PATH, '_worker', id], {
       cwd,
       env: process.env,
-      detached: process.platform !== 'win32',
+      detached: true,
       windowsHide: true,
       stdio: ['ignore', logFd, logFd],
     });
@@ -51,28 +51,19 @@ function spawnDetachedWorkerProcess(id, cwd, logFile) {
   }
 }
 
-function buildInitialJobRecord({
-  id,
-  driverId,
-  baseMeta,
-  pid,
-  conversationId,
-  continuedFrom,
-  restartedFrom,
-  paths,
-}) {
+function buildInitialJobRecord(p) {
   return {
-    id,
-    target: driverId,
-    ...baseMeta,
+    id: p.id,
+    target: p.driverId,
+    ...p.baseMeta,
     status: 'running',
-    pid,
-    worker_identity: processIdentity(pid),
+    pid: p.pid,
+    worker_identity: null,
     started_at: new Date().toISOString(),
-    conversation_id: conversationId,
-    ...(continuedFrom ? { continued_from: continuedFrom } : {}),
-    ...(restartedFrom ? { restarted_from: restartedFrom } : {}),
-    ...paths,
+    conversation_id: p.conversationId,
+    ...(p.continuedFrom ? { continued_from: p.continuedFrom } : {}),
+    ...(p.restartedFrom ? { restarted_from: p.restartedFrom } : {}),
+    ...p.paths,
   };
 }
 
@@ -274,7 +265,7 @@ function rememberWorkerSession(jobId, driverId, convId, root) {
   }, root);
 }
 
-async function waitForJobRecord(jobId, root, timeoutMs = 2000) {
+async function waitForJobRecord(jobId, root, timeoutMs = 10000) {
   const deadline = Date.now() + timeoutMs;
   const readRecord = () => (loadState(root).jobs || []).find((j) => j.id === jobId) || null;
   let job = readRecord();
@@ -284,6 +275,16 @@ async function waitForJobRecord(jobId, root, timeoutMs = 2000) {
   }
   if (!job) throw new Error(`Worker could not find job "${jobId}" in state.`);
   return job;
+}
+
+function publishWorkerStartup(jobId, root) {
+  const identity = processIdentity(process.pid);
+  updateJob(
+    jobId,
+    { pid: process.pid, worker_identity: identity, worker_started_at: new Date().toISOString() },
+    root
+  );
+  process.stderr.write(`[cospan] worker started ${jobId} pid=${process.pid}\n`);
 }
 
 export async function cmdWorker(jobId) {
@@ -303,7 +304,7 @@ export async function cmdWorker(jobId) {
   process.on('SIGINT', onSignal);
   const cancelTimer = setInterval(checkCancel, 100);
 
-  updateJob(jobId, { worker_started_at: new Date().toISOString() }, root);
+  publishWorkerStartup(jobId, root);
 
   try {
     checkCancel();
@@ -338,10 +339,11 @@ export async function cmdWorker(jobId) {
       driver,
       binary: spawnCmd.cmd,
       args: spawnCmd.args,
+      windowsVerbatimArguments: Boolean(spawnCmd.windowsVerbatimArguments),
       stdinText: inv.stdinText,
       cwd: inv.cwd || spec.cwd,
       job,
-      budget: durationToMs(spec.timeout) - (Date.now() - started),
+      budget: durationToMs(spec.timeout),
       signal: controller.signal,
       update: (fields) => updateJob(jobId, fields, root),
       conversation: rememberSession,

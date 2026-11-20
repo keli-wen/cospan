@@ -96,7 +96,7 @@ test('checkForUpdate uses HTTP server, respects TTL cache, and handles opt-out',
     assert.equal(notice2, null);
   } finally {
     server.close();
-    fs.rmSync(base, { recursive: true, force: true });
+    fs.rmSync(base, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   }
 });
 
@@ -179,6 +179,7 @@ test('doctor, send, and MCP surface update notices and stale legacy config overr
     );
 
     const mcp = spawn(process.execPath, [MCP_SERVER], { cwd: repo, env });
+    const mcpClosed = new Promise((resolve) => mcp.once('close', resolve));
     const pending = new Map();
     let buf = '';
     mcp.stdout.on('data', (chunk) => {
@@ -218,7 +219,10 @@ test('doctor, send, and MCP surface update notices and stale legacy config overr
         )
       );
     } finally {
-      mcp.kill('SIGTERM');
+      if (mcp.exitCode === null && mcp.signalCode === null) {
+        mcp.kill('SIGTERM');
+      }
+      await Promise.race([mcpClosed, new Promise((r) => setTimeout(r, 3000))]);
     }
 
     for (const id of [send1Id, send2Id, mcpJobId].filter(Boolean)) {
@@ -235,6 +239,6 @@ test('doctor, send, and MCP surface update notices and stale legacy config overr
     assert.equal(JSON.parse(afterDoc.stdout).stale_overrides.length, 0);
   } finally {
     server.close();
-    fs.rmSync(base, { recursive: true, force: true });
+    fs.rmSync(base, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   }
 });

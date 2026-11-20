@@ -8,7 +8,7 @@ export const COSPAN_BIN_PATH = path.join(PACKAGE_ROOT, 'bin', 'cospan.mjs');
 export const SIDECAR_SERVER_PATH = path.join(PACKAGE_ROOT, 'src', 'sidecar', 'server.mjs');
 
 function shellQuote(p) {
-  return `"${String(p).replaceAll('"', '\\"')}"`;
+  return `"${String(p).replaceAll('\\', '/').replaceAll('"', '\\"')}"`;
 }
 
 export function cliCommandPrefix(cospanBin = COSPAN_BIN_PATH) {

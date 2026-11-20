@@ -163,45 +163,41 @@ test(
   }
 );
 
-test(
-  'win32 CRLF resilience: buildDshClientBundle strips globalThis footer from CRLF cospan-board.js',
-  WIN_ONLY,
-  async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cospan-win-crlf-'));
-    try {
-      const uiDir = path.join(root, 'src', 'ui');
-      const dshDir = path.join(root, 'dsh');
-      fs.mkdirSync(uiDir, { recursive: true });
-      fs.mkdirSync(dshDir, { recursive: true });
+test('CRLF resilience: buildDshClientBundle strips globalThis footer on CRLF input', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cospan-win-crlf-'));
+  try {
+    const uiDir = path.join(root, 'src', 'ui');
+    const dshDir = path.join(root, 'dsh');
+    fs.mkdirSync(uiDir, { recursive: true });
+    fs.mkdirSync(dshDir, { recursive: true });
 
-      const toCrlf = (text) => text.replace(/\r?\n/g, '\r\n');
-      fs.copyFileSync(
-        path.join(ROOT_DIR, 'src', 'ui', 'sync-dsh-client.mjs'),
-        path.join(uiDir, 'sync-dsh-client.mjs')
-      );
-      fs.writeFileSync(
-        path.join(uiDir, 'cospan-board.css'),
-        toCrlf(fs.readFileSync(path.join(ROOT_DIR, 'src', 'ui', 'cospan-board.css'), 'utf8'))
-      );
-      fs.writeFileSync(
-        path.join(uiDir, 'cospan-board.js'),
-        toCrlf(fs.readFileSync(path.join(ROOT_DIR, 'src', 'ui', 'cospan-board.js'), 'utf8'))
-      );
-      fs.writeFileSync(
-        path.join(dshDir, 'client-bridge.js'),
-        toCrlf(fs.readFileSync(path.join(ROOT_DIR, 'dsh', 'client-bridge.js'), 'utf8'))
-      );
+    const toCrlf = (text) => text.replace(/\r?\n/g, '\r\n');
+    fs.copyFileSync(
+      path.join(ROOT_DIR, 'src', 'ui', 'sync-dsh-client.mjs'),
+      path.join(uiDir, 'sync-dsh-client.mjs')
+    );
+    fs.writeFileSync(
+      path.join(uiDir, 'cospan-board.css'),
+      toCrlf(fs.readFileSync(path.join(ROOT_DIR, 'src', 'ui', 'cospan-board.css'), 'utf8'))
+    );
+    fs.writeFileSync(
+      path.join(uiDir, 'cospan-board.js'),
+      toCrlf(fs.readFileSync(path.join(ROOT_DIR, 'src', 'ui', 'cospan-board.js'), 'utf8'))
+    );
+    fs.writeFileSync(
+      path.join(dshDir, 'client-bridge.js'),
+      toCrlf(fs.readFileSync(path.join(ROOT_DIR, 'dsh', 'client-bridge.js'), 'utf8'))
+    );
 
-      const mod = await import(pathToFileURL(path.join(uiDir, 'sync-dsh-client.mjs')).href);
-      const bundle = mod.buildDshClientBundle();
-      assert.doesNotMatch(
-        bundle,
-        /if \(typeof globalThis !== 'undefined'\)/,
-        'buildDshClientBundle must strip the globalThis footer even for CRLF cospan-board.js'
-      );
-      assert.doesNotMatch(bundle, /globalThis\.CospanBoard\s*=/);
-    } finally {
-      rmTree(root);
-    }
+    const mod = await import(pathToFileURL(path.join(uiDir, 'sync-dsh-client.mjs')).href);
+    const bundle = mod.buildDshClientBundle();
+    assert.doesNotMatch(
+      bundle,
+      /if \(typeof globalThis !== 'undefined'\)/,
+      'buildDshClientBundle must strip the globalThis footer even for CRLF cospan-board.js'
+    );
+    assert.doesNotMatch(bundle, /globalThis\.CospanBoard\s*=/);
+  } finally {
+    rmTree(root);
   }
-);
+});

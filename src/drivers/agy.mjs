@@ -96,8 +96,6 @@ export const agyDriver = {
   }) {
     const format = kind === 'ask' ? 'json' : 'stream-json';
     const args = [
-      '-p',
-      prompt,
       '--model',
       model,
       '--output-format',
@@ -110,7 +108,7 @@ export const agyDriver = {
     if (conversationId) args.push('--conversation', conversationId);
     if (kind === 'ask' || readonly) args.push('--mode', 'plan');
     args.push(permissions !== 'restricted' ? '--dangerously-skip-permissions' : '--sandbox');
-    return { args, stdinText: null, cwd: workspace };
+    return { args, stdinText: prompt, cwd: workspace };
   },
 
   parseForegroundOutput({ stdout, stderr, exitCode }) {

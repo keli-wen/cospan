@@ -85,8 +85,13 @@ export const CLI_CONTRACT_SPECS = {
 };
 
 function runHelpProbe(binary, probeArgs) {
-  const { cmd, args } = buildSpawnCommand(binary, probeArgs);
-  const r = spawnSync(cmd, args, { encoding: 'utf8', timeout: 5000, windowsHide: true });
+  const spawnCmd = buildSpawnCommand(binary, probeArgs);
+  const r = spawnSync(spawnCmd.cmd, spawnCmd.args, {
+    encoding: 'utf8',
+    timeout: 5000,
+    windowsHide: true,
+    windowsVerbatimArguments: Boolean(spawnCmd.windowsVerbatimArguments),
+  });
   if (r.error) {
     return { ok: false, output: '', error: r.error.message };
   }

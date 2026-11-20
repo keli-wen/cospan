@@ -281,7 +281,7 @@ function observeChildLifecycle(child, state) {
   return { exited, closed };
 }
 
-function startChildTracking(opts, ctx, hardDeadline) {
+function startChildTracking(opts, ctx, rawFd, budget) {
   const { binary, args, stdinText = null, cwd, env = process.env, update, signal } = opts;
   const { state, procTracker, abort, stop } = ctx;
   state.child = spawnTargetChild(binary, args, {
@@ -291,17 +291,20 @@ function startChildTracking(opts, ctx, hardDeadline) {
     windowsVerbatimArguments: opts.windowsVerbatimArguments,
   });
   const lifecycle = observeChildLifecycle(state.child, state);
+  const parser = wireChildOutputPipes({ child: state.child, rawFd, ...ctx });
   procTracker.track();
   state.trackingTimer = setInterval(procTracker.track, process.platform === 'win32' ? 5000 : 1000);
+  const startedAt = Date.now();
+  const hardDeadline = startedAt + Math.max(0, budget);
   update({
     target_pid: state.child.pid,
-    execution_started_at: new Date().toISOString(),
+    execution_started_at: new Date(startedAt).toISOString(),
     hard_deadline_at: new Date(hardDeadline).toISOString(),
   });
   signal.addEventListener('abort', abort, { once: true });
   if (signal.aborted) abort();
   state.deadline = setTimeout(() => stop('hard_timeout'), Math.max(0, hardDeadline - Date.now()));
-  return lifecycle;
+  return { ...lifecycle, parser };
 }
 
 async function finishChildExecution(opts, ctx, { exited, closed, parser }) {
@@ -333,7 +336,6 @@ async function finishChildExecution(opts, ctx, { exited, closed, parser }) {
  */
 export async function runStreaming(opts) {
   const { driver, job, budget, signal, conversation } = opts;
-  const hardDeadline = Date.now() + Math.max(0, budget);
   const rawFd = fs.openSync(job.events_file, 'a');
   const session = driver.createStreamSession({ onConversation: conversation });
   const state = createStreamState();
@@ -343,8 +345,7 @@ export async function runStreaming(opts) {
 
   try {
     life.publish();
-    const { exited, closed } = startChildTracking(opts, ctx, hardDeadline);
-    const parser = wireChildOutputPipes({ child: state.child, rawFd, ...ctx });
+    const { exited, closed, parser } = startChildTracking(opts, ctx, rawFd, budget);
     return await finishChildExecution(opts, ctx, { exited, closed, parser });
   } catch (error) {
     if (!state.stopping && state.child?.pid) await life.cleanup();

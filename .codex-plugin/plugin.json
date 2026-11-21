@@ -1,6 +1,6 @@
 {
   "name": "cospan",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Persona-free point-to-point headless delegation primitive for Codex ($cospan:agy, $cospan:codex, $cospan:claude, $cospan:dsh + cospan MCP).",
   "keywords": [
     "cospan",

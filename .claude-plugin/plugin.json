@@ -1,6 +1,6 @@
 {
   "name": "cospan",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Unified orchestration across coding agents — connect Antigravity, OpenAI Codex, Claude Code, and DeepSeek Harness through one async delegation protocol.",
   "icon": "assets/icon-512.png",
   "author": {

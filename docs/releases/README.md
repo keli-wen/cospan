@@ -4,6 +4,7 @@ Versioned release notes and visual release overviews live here.
 
 ## Releases
 
+- **[v0.1.2](v0.1.2.md)** — First-class Windows runtime & gated CI: native `.cmd` shim unwrapping, `stdin` prompt transport for `agy`, detached worker & NTFS `state.lock` hardening, and 55/55 `windows-latest` CI.
 - **[v0.1.1](v0.1.1.md)** — Gemini 4 Neon is in: first-class `neon` shortcut and `low`/`medium`/`high`/`xhigh` effort resolution for Antigravity (`agy`).
 - **[v0.1.0](v0.1.0.md)** — Initial public release: unified 4-harness async orchestration across Antigravity (`agy`), OpenAI Codex (`codex`), Claude Code (`claude`), and DeepSeek Harness (`dsh`).
 

@@ -210,6 +210,120 @@ test('repo-index registration is idempotent and /cospan-ctl surfaces worktree jo
   });
 });
 
+test('explicit <job-id> CLI commands resolve sibling worktrees; no-ID stays isolated', async () => {
+  await withWorktreeFixture(async ({ home, mainRepo, wtDir }) => {
+    const wtDoneId = sendAndWaitAgy(wtDir, home, 'Sibling done task', 'sess-cli');
+    const canonicalWt = fs.realpathSync.native(wtDir);
+
+    // No-ID commands from mainRepo (0 jobs) stay strictly isolated and never cross branches
+    assert.match(runCospanInHome(['status'], { cwd: mainRepo, home }).stdout, /No cospan jobs/);
+    assert.equal(runCospanInHome(['wait', '--timeout', '1s'], { cwd: mainRepo, home }).code, 1);
+    assert.equal(runCospanInHome(['result'], { cwd: mainRepo, home }).code, 1);
+    assert.equal(runCospanInHome(['observe'], { cwd: mainRepo, home }).code, 1);
+    assert.equal(
+      runCospanInHome(['continue', '--last', '--prompt', 'should fail'], { cwd: mainRepo, home })
+        .code,
+      1
+    );
+
+    // Explicit <wt-job-id> succeeds from mainRepo for observe, status, result
+    const obs = runCospanInHome(['observe', wtDoneId], { cwd: mainRepo, home });
+    assert.equal(obs.code, 0, obs.stderr);
+    assert.equal(JSON.parse(obs.stdout).job_id, wtDoneId);
+
+    const st = runCospanInHome(['status', wtDoneId], { cwd: mainRepo, home });
+    assert.equal(st.code, 0, st.stderr);
+    assert.equal(JSON.parse(st.stdout).id, wtDoneId);
+
+    const res = runCospanInHome(['result', wtDoneId], { cwd: mainRepo, home });
+    assert.equal(res.code, 0, res.stderr);
+    assert.match(res.stdout, /Sibling done task/);
+
+    // Explicit wait & cancel work from mainRepo on running sibling worktree jobs
+    const sendDelay = runCospanInHome(
+      ['send', '--to', 'agy', '--readonly', '--json', '--prompt', 'Sibling delayed task'],
+      { cwd: wtDir, home, env: { FAKE_AGY_DELAY_MS: '250' } }
+    );
+    const wtDelayedId = JSON.parse(sendDelay.stdout).job_id;
+    const waitRes = runCospanInHome(['wait', wtDelayedId, '--timeout', '10s'], {
+      cwd: mainRepo,
+      home,
+    });
+    assert.equal(waitRes.code, 0, waitRes.stderr);
+    assert.match(waitRes.stdout, /Sibling delayed task/);
+
+    const sendHang = runCospanInHome(['send', '--to', 'codex', '--json', '--prompt', 'Hang wt'], {
+      cwd: wtDir,
+      home,
+      env: { FAKE_CODEX_HANG: '1' },
+    });
+    const wtHangId = JSON.parse(sendHang.stdout).job_id;
+    const cancelRes = runCospanInHome(['cancel', wtHangId], { cwd: mainRepo, home });
+    assert.equal(cancelRes.code, 0, cancelRes.stderr);
+    assert.equal(
+      JSON.parse(runCospanInHome(['status', wtHangId], { cwd: mainRepo, home }).stdout).status,
+      'canceled'
+    );
+
+    // Explicit continue --id and restart preserve sibling worktree cwd and trajectory
+    const contRes = runCospanInHome(
+      ['continue', '--id', wtDoneId, '--json', '--prompt', 'Sibling follow-up'],
+      { cwd: mainRepo, home }
+    );
+    assert.equal(contRes.code, 0, contRes.stderr);
+    const contId = JSON.parse(contRes.stdout).job_id;
+    const contWait = runCospanInHome(['wait', contId, '--timeout', '10s'], { cwd: mainRepo, home });
+    assert.equal(contWait.code, 0, contWait.stderr);
+    assert.match(contWait.stdout, /Sibling follow-up/);
+    const contStatus = JSON.parse(
+      runCospanInHome(['status', contId], { cwd: mainRepo, home }).stdout
+    );
+    assert.equal(fs.realpathSync.native(contStatus.cwd), canonicalWt);
+
+    const restartRes = runCospanInHome(['restart', wtDoneId], { cwd: mainRepo, home });
+    assert.equal(restartRes.code, 0, restartRes.stderr);
+    const restartedId = /new job (agy-[^\s]+)/.exec(restartRes.stdout)?.[1];
+    assert.ok(restartedId);
+    assert.equal(
+      runCospanInHome(['wait', restartedId, '--timeout', '10s'], { cwd: mainRepo, home }).code,
+      0
+    );
+    assert.equal(
+      fs.realpathSync.native(
+        JSON.parse(runCospanInHome(['status', restartedId], { cwd: mainRepo, home }).stdout).cwd
+      ),
+      canonicalWt
+    );
+
+    // Main worktree still has 0 local jobs; adding a main job keeps --last pinned to mainRepo
+    assert.match(runCospanInHome(['status'], { cwd: mainRepo, home }).stdout, /No cospan jobs/);
+    const mainJobId = sendAndWaitAgy(mainRepo, home, 'Main only task', 'sess-cli');
+    const lastCont = runCospanInHome(
+      ['continue', '--last', '--json', '--prompt', 'Main follow-up'],
+      { cwd: mainRepo, home }
+    );
+    assert.equal(lastCont.code, 0, lastCont.stderr);
+    const lastParsed = JSON.parse(lastCont.stdout);
+    assert.equal(lastParsed.continued_from, mainJobId);
+    assert.equal(
+      runCospanInHome(['wait', lastParsed.job_id, '--timeout', '10s'], { cwd: mainRepo, home })
+        .code,
+      0
+    );
+
+    // Removed worktree jobs remain readable via explicit ID, while continue fails cleanly
+    runGit(['worktree', 'remove', '--force', wtDir], mainRepo);
+    assert.equal(runCospanInHome(['result', wtDoneId], { cwd: mainRepo, home }).code, 0);
+    assert.equal(runCospanInHome(['observe', wtDoneId], { cwd: mainRepo, home }).code, 0);
+    const deadCont = runCospanInHome(
+      ['continue', '--id', wtDoneId, '--prompt', 'After wt removal'],
+      { cwd: mainRepo, home }
+    );
+    assert.equal(deadCont.code, 1);
+    assert.match(deadCont.stderr, /no longer exists/);
+  });
+});
+
 test('terminateVerifiedWorker skips SIGTERM until worker_started_at is published', async () => {
   const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
     stdio: 'ignore',

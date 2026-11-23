@@ -6,9 +6,11 @@ import {
   findJob,
   liveJobStatus,
   loadState,
+  lookupJob,
   pidAlive,
   refreshJobs,
   repoRoot,
+  resolveJob,
   updateState,
 } from '../job-store.mjs';
 
@@ -19,10 +21,11 @@ export async function cmdWait(opts) {
   if (!Number.isFinite(budget) || budget < 0)
     die(`invalid --timeout "${timeout}" (examples: 100s, 20m)`);
 
-  const root = repoRoot();
+  let jobRoot = repoRoot();
   const findTarget = () => {
-    const jobs = loadState(root).jobs || [];
-    return id ? jobs.find((j) => j.id === id) || null : jobs.at(-1) || null;
+    const found = lookupJob(id, jobRoot);
+    if (found) jobRoot = found.root;
+    return found?.job || null;
   };
   let job = findTarget();
   if (!job)
@@ -37,24 +40,31 @@ export async function cmdWait(opts) {
     if (!job) die('job record disappeared from state.json');
     status = liveJobStatus(job);
   }
-  return renderJobResponse(job);
+  return renderJobResponse(job, { root: jobRoot });
 }
 
 export function cmdObserve(opts) {
   const id = opts._[0] || opts.id || null;
-  const job = findJob(id);
-  renderJobResponse(job, { observeOnly: true });
+  const { job, root } = resolveJob(id);
+  renderJobResponse(job, { observeOnly: true, root });
 }
 
 export function cmdResult(opts) {
   const root = repoRoot();
-  const state = loadState(root);
-  refreshJobs(state);
-  const jobs = state.jobs || [];
   const id = opts._[0] || opts.id || null;
-  const job = id
-    ? jobs.find((j) => j.id === id)
-    : [...jobs].reverse().find((j) => j.status !== 'running');
+  let jobRoot = root;
+  let job = null;
+  if (id) {
+    const found = lookupJob(id, root);
+    if (found) {
+      job = { ...found.job, status: liveJobStatus(found.job) };
+      jobRoot = found.root;
+    }
+  } else {
+    const state = loadState(root);
+    refreshJobs(state);
+    job = [...(state.jobs || [])].reverse().find((j) => j.status !== 'running') || null;
+  }
   if (!job)
     die(id ? `no job "${id}" in this repository` : 'no finished cospan jobs in this repository');
   if (job.status === 'running') {
@@ -66,24 +76,26 @@ export function cmdResult(opts) {
   if (!fs.existsSync(job.result_file)) {
     die(`job ${job.id} (${job.status}) has no stored result. Log: ${job.log_file}`);
   }
-  renderJobResponse(job);
+  renderJobResponse(job, { root: jobRoot });
   process.exitCode = job.status === 'attention' ? 5 : 0;
 }
 
 export function cmdStatus(opts) {
   const root = repoRoot();
-  const state = loadState(root);
-  refreshJobs(state);
-  const jobs = state.jobs || [];
   const id = opts._[0] || opts.id || null;
 
   if (id) {
-    const job = jobs.find((j) => j.id === id);
-    if (!job) die(`no job "${id}" in this repository`);
+    const found = lookupJob(id, root);
+    if (!found) die(`no job "${id}" in this repository`);
+    const job = { ...found.job, status: liveJobStatus(found.job) };
     process.stdout.write(JSON.stringify(job, null, 2) + '\n');
     process.exitCode = JOB_EXIT_CODES[job.status] ?? 1;
     return;
   }
+
+  const state = loadState(root);
+  refreshJobs(state);
+  const jobs = state.jobs || [];
 
   if (!jobs.length) {
     process.stdout.write('No cospan jobs recorded in this repository.\n');
@@ -169,8 +181,10 @@ export function terminateVerifiedWorker(job) {
 export async function cmdCancel(opts) {
   const id = opts._[0] || opts.id;
   if (!id) die('`cancel` requires a job id (see `cospan status`)');
-  const root = repoRoot();
-  const res = requestSafeJobCancellation(id, root);
+  const found = lookupJob(id, repoRoot());
+  if (!found) die(`no job "${id}" in this repository`);
+  const targetRoot = found.root;
+  const res = requestSafeJobCancellation(id, targetRoot);
   if (!res.ok) die(res.error);
 
   if (!res.changed) {
@@ -182,7 +196,7 @@ export async function cmdCancel(opts) {
 
   const deadline = Date.now() + 10000;
   while (Date.now() < deadline) {
-    const current = findJob(id, root);
+    const current = findJob(id, targetRoot);
     const status = liveJobStatus(current);
     if (status === 'canceled' && !pidAlive(current.pid)) {
       process.stdout.write(`Canceled job ${id} (pid ${res.job.pid}).\n`);

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { workspaceTrajectoryDir } from './config.mjs';
 import { sh } from './envelope.mjs';
-import { registerRepoTrajectory } from './repo-family.mjs';
+import { registerRepoTrajectory, resolveFamilyTrajectories } from './repo-family.mjs';
 import { readTextRetry, replaceFile, withStateLock } from './state-lock.mjs';
 import { atomicJSON } from './stream-worker.mjs';
 import { die, MAX_RETAINED_JOBS } from './cli-args.mjs';
@@ -135,16 +135,45 @@ export function makeJobId(target) {
   return `${target}-${stamp}-${randomUUID().slice(0, 6)}`;
 }
 
-export function findJob(id, root = repoRoot()) {
-  const jobs = loadState(root).jobs || [];
-  const job = id ? jobs.find((j) => j.id === id) : jobs.at(-1);
-  if (!job)
+function loadTrajectoryJobs(trajDir) {
+  try {
+    const parsed = JSON.parse(readTextRetry(path.join(trajDir, 'state.json')));
+    return parsed && Array.isArray(parsed.jobs) ? parsed.jobs : [];
+  } catch {
+    return [];
+  }
+}
+
+export function lookupJob(id, root = repoRoot()) {
+  const localJobs = loadState(root).jobs || [];
+  if (!id) {
+    const latest = localJobs.at(-1) || null;
+    return latest ? { job: latest, root } : null;
+  }
+  const localJob = localJobs.find((j) => j.id === id);
+  if (localJob) return { job: localJob, root };
+  for (const entry of resolveFamilyTrajectories(root)) {
+    if (entry.is_primary) continue;
+    const siblingJob = loadTrajectoryJobs(entry.trajectory_dir).find((j) => j.id === id);
+    if (siblingJob) return { job: siblingJob, root: entry.workspace_root };
+  }
+  return null;
+}
+
+export function resolveJob(id, root = repoRoot()) {
+  const found = lookupJob(id, root);
+  if (!found) {
     die(
       id
         ? `no job "${id}" recorded in this repository`
         : 'no cospan jobs recorded in this repository'
     );
-  return job;
+  }
+  return found;
+}
+
+export function findJob(id, root = repoRoot()) {
+  return resolveJob(id, root).job;
 }
 
 export function updateJob(jobId, fields, root) {

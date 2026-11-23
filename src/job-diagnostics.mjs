@@ -7,7 +7,7 @@ import {
   JOB_EXIT_CODES,
   MAX_BACKGROUND_MS,
 } from './cli-args.mjs';
-import { findJob, liveJobStatus, repoRoot } from './job-store.mjs';
+import { findJob, liveJobStatus, repoRoot, resolveJob } from './job-store.mjs';
 import { readTextRetry } from './state-lock.mjs';
 
 export const CRASH_SANDBOX_HINT =
@@ -218,13 +218,14 @@ function writeMissingResultDiagnostics(job, status) {
   if (status === 'crashed') process.stdout.write(`\n${CRASH_SANDBOX_HINT}\n`);
 }
 
-export function renderJobResponse(initial, { observeOnly = false } = {}) {
-  const root = repoRoot();
-  let job = findJob(initial.id, root);
+export function renderJobResponse(initial, { observeOnly = false, root = repoRoot() } = {}) {
+  const resolved = resolveJob(initial.id, root);
+  let job = resolved.job;
+  const jobRoot = resolved.root;
   let status = liveJobStatus(job);
   if (status === 'running') {
     const snapshot = readObservation(job);
-    job = findJob(job.id, root);
+    job = findJob(job.id, jobRoot);
     status = liveJobStatus(job);
     if (status === 'running') {
       process.stdout.write(JSON.stringify(snapshot) + '\n');

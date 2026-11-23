@@ -16,7 +16,7 @@ import {
   validatePermissionsFlags,
   validateSendTimeout,
 } from '../cli-args.mjs';
-import { findJob, liveJobStatus, loadState, repoRoot } from '../job-store.mjs';
+import { liveJobStatus, loadState, repoRoot, resolveJob } from '../job-store.mjs';
 import { launchDetachedJob } from '../job-worker.mjs';
 import { consumeCachedUpdateNotice, triggerBackgroundUpdateCheck } from '../update-check.mjs';
 
@@ -159,7 +159,7 @@ function resolveContinuationSourceJob(opts, root) {
   if (!opts.last) {
     const prevId = opts.id || opts._[0];
     if (!prevId) die('`continue` requires `--id <job-id>` or `--last`');
-    return findJob(prevId, root);
+    return resolveJob(prevId, root);
   }
   const targetFilter = opts.to ? String(opts.to).toLowerCase() : null;
   const jobs = loadState(root).jobs || [];
@@ -178,13 +178,21 @@ function resolveContinuationSourceJob(opts, root) {
         : 'no previous resumable cospan job found in this workspace'
     );
   }
-  return prev;
+  return { job: prev, root };
+}
+
+function resolveExistingJobCwd(job, fallbackRoot, explicitCwd = null) {
+  const targetCwd = explicitCwd || job.cwd || fallbackRoot || process.cwd();
+  if (!fs.existsSync(targetCwd)) {
+    die(`recorded working directory "${targetCwd}" for job ${job.id} no longer exists`);
+  }
+  return targetCwd;
 }
 
 export function cmdContinue(opts) {
   validatePermissionsFlags(opts);
   const root = repoRoot();
-  const prev = resolveContinuationSourceJob(opts, root);
+  const { job: prev, root: jobRoot } = resolveContinuationSourceJob(opts, root);
   if (liveJobStatus(prev) === 'running') {
     die(`job ${prev.id} is still running — wait for it or cancel it before continuing`);
   }
@@ -194,9 +202,13 @@ export function cmdContinue(opts) {
         `(use \`restart ${prev.id}\` instead)`
     );
   }
+  const targetCwd = resolveExistingJobCwd(prev, jobRoot);
   const prompt = readTaskPrompt(opts);
   const timeout = validateSendTimeout(opts.timeout || prev.timeout);
-  const { config } = loadEffectiveConfig({ workspaceRoot: root, explicitConfigPath: opts.config });
+  const { config } = loadEffectiveConfig({
+    workspaceRoot: jobRoot,
+    explicitConfigPath: opts.config,
+  });
   maybeEmitUpdateNotice(config);
   const record = launchDetachedJob({
     target: prev.target,
@@ -211,7 +223,7 @@ export function cmdContinue(opts) {
     timeout,
     conversationId: prev.conversation_id,
     continuedFrom: prev.id,
-    cwd: prev.cwd || process.cwd(),
+    cwd: targetCwd,
   });
 
   if (opts.json) {
@@ -242,7 +254,7 @@ export function cmdRestart(opts) {
   const prevId = opts._[0] || opts.id;
   if (!prevId) die('`restart` requires `<job-id>`');
   const root = repoRoot();
-  const prev = findJob(prevId, root);
+  const { job: prev, root: jobRoot } = resolveJob(prevId, root);
   if (liveJobStatus(prev) === 'running') {
     die(`job ${prev.id} is still running — cancel it before restarting`);
   }
@@ -250,6 +262,7 @@ export function cmdRestart(opts) {
     die(`job ${prev.id} has no stored spec_file to restart`);
   }
   const spec = JSON.parse(fs.readFileSync(prev.spec_file, 'utf8'));
+  const targetCwd = resolveExistingJobCwd(prev, jobRoot, spec.cwd);
   const timeout = validateSendTimeout(opts.timeout || spec.timeout);
   const record = launchDetachedJob({
     target: spec.target,
@@ -263,7 +276,7 @@ export function cmdRestart(opts) {
     prior: spec,
     timeout,
     restartedFrom: prev.id,
-    cwd: spec.cwd || process.cwd(),
+    cwd: targetCwd,
   });
   process.stdout.write(
     `Restarted ${prev.id} as new job ${record.id} (${record.target}).\n` +

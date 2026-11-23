@@ -75,8 +75,8 @@ Use the matching template in [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/
 
 1. Branch from `master` using a descriptive prefix (`feat/...`, `fix/...`, `chore/...`, `docs/...`). Never commit directly to `master`.
 2. Keep each PR focused on one logical change and use Conventional Commits (`feat(scope): ...`, `fix(scope): ...`, `chore(scope): ...`).
-3. Fill out every section of [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md):
-   - Explain **what** changed and **why** (root cause or motivation).
-   - Link related issues (`Fixes #N` / `Closes #N` / `Relates to #N`).
-   - Paste **actual observed verification results** (commands run, test pass/skip counts, and any manual/real-OS checks).
+3. Fill out [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md) for **human comprehension, not diff narration**:
+   - Start with a plain-language **TL;DR** and a small **Before → After** CUJ example so a reviewer understands the user-visible impact in 10 seconds.
+   - **Never narrate the diff** (no file-by-file summaries or internal function lists)—agents and reviewers inspect the git diff for implementation details; keep the PR body strictly to incremental value (intent, examples, non-obvious trade-offs/boundaries, linked issues, and verification).
+   - Link related issues (`Fixes #N` / `Closes #N` / `Relates to #N`) and paste **actual observed verification results** (commands run, test pass/skip counts, and any manual/real-OS checks).
 4. Never commit local trajectory artifacts (`~/.cospan/`), `.env` files, or unrelated scratch directories.

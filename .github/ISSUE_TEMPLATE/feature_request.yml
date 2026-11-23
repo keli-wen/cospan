@@ -1,0 +1,50 @@
+name: Feature Request / RFC
+description: Propose a new capability, CLI/MCP improvement, or orchestration primitive.
+title: 'feat(<area>): '
+labels: ['feature']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Cospan stays intentionally lean: pure ESM `.mjs`, Node `>= 20`, zero runtime dependencies, and strict contract stability.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - core (CLI lifecycle, wait/observe/cancel, state/worktree)
+        - drivers (model/effort resolution, streaming projection)
+        - hosts (installer, skills, stdio MCP, DSH Cordis bundle)
+        - ui (sidebar panel / sidecar)
+        - flow (programmable multi-agent orchestration)
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / Motivation
+      description: What workflow is painful, slow, or impossible today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior / UX
+      description: Concrete CLI flags, MCP parameters, API shape, or user-facing behavior.
+    validations:
+      required: true
+
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints, edge cases, or non-goals
+      description: Compatibility boundaries, failure modes, or things explicitly out of scope.
+
+  - type: textarea
+    id: verification
+    attributes:
+      label: Suggested verification plan
+      description: How should this be verified offline (unit/fake-CLI tests) and/or manually?

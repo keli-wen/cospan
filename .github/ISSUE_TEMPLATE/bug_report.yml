@@ -1,0 +1,67 @@
+name: Bug Report
+description: Report broken behavior, crashes, driver flag drift, or cross-platform issues in cospan.
+title: 'bug(<area>): '
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! For CLI / driver issues, running `cospan doctor --check --json` (zero tokens) helps diagnose most problems immediately.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of cospan is affected?
+      options:
+        - core (async job runtime, CLI, state store, wait/observe/cancel)
+        - drivers (agy, codex, claude, dsh flags or model/effort mapping)
+        - hosts (installer, skills, stdio MCP server, DSH plugin)
+        - ui (sidebar panel / sidecar / worktree family view)
+        - docs / packaging
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Concise description of the bug and the observed behavior.
+      placeholder: Running `cospan continue --id <wt-job-id>` from the main worktree fails with `no job recorded in this repository`...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands, flags, or minimal setup needed to reproduce.
+      placeholder: |
+        1. Run `cospan send --to codex ...`
+        2. Run `cospan wait ...`
+        3. Observe error: ...
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment (OS, Node version, cospan version, host & target CLIs)
+      placeholder: macOS 15 / Windows 11, Node v22.x, cospan v0.1.2, host=agy, target=codex
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics (`cospan doctor --check --json` / `cospan observe <id>` / logs)
+      description: Optional zero-token diagnostic output or relevant log tail (redact any private paths or secrets).
+      render: text

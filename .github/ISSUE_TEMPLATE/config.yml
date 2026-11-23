@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Contributing & Agent Verification Guide
+    url: https://github.com/keli-wen/cospan/blob/master/CONTRIBUTING.md
+    about: Read local setup, engineering rules, and the verification matrix before opening a PR.
+  - name: Agent-First Installation & Upgrade Guide
+    url: https://github.com/keli-wen/cospan/blob/master/docs/INSTALL_FOR_AGENTS.md
+    about: Automated setup and `doctor --check` troubleshooting for agy, claude, codex, and dsh.

@@ -1,0 +1,32 @@
+name: New Target Harness or Model Mapping
+description: Request support for a new coding agent CLI harness or model/effort mapping.
+title: 'drivers(<target>): '
+labels: ['feature', 'drivers']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template to request a new target CLI driver (e.g. Gemini CLI, OpenCode, Pi) or a new model shortcut / effort tier for an existing driver (`agy`, `codex`, `claude`, `dsh`).
+
+  - type: input
+    id: target
+    attributes:
+      label: Target CLI or Model Name
+      placeholder: e.g. `opencode` CLI, or `gemini-4.1-neon` / `gpt-6.0-astra`
+    validations:
+      required: true
+
+  - type: textarea
+    id: cli_contract
+    attributes:
+      label: Upstream CLI Invocation & Headless Contract
+      description: For new harnesses, share `--help` output or exact flags for non-interactive prompt input, JSON/NDJSON streaming, session resume, and read-only/sandbox mode. For new models, share the exact upstream `--model` and effort flag/suffix format.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Expected shortcuts, defaults, or edge cases
+      description: Desired shortcut alias (if any), effort tiers (`low`/`medium`/`high`/`xhigh`/`max`), and any platform quirks (macOS/Linux/Windows).

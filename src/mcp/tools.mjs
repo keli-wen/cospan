@@ -3,6 +3,10 @@ import { spawn } from 'node:child_process';
 
 const TARGET_ENUM = ['agy', 'codex', 'claude', 'dsh'];
 const EFFORT_ENUM = ['low', 'medium', 'high', 'xhigh', 'max'];
+const CWD_PROP = {
+  type: 'string',
+  description: 'Absolute path to the workspace/repository directory.',
+};
 const MODEL_PARAM_DESC =
   'Optional model shortcut (pass verbatim, e.g. sol/terra/astra/luna, ' +
   'flash/neon/carbon/argon/hydrogen/opus/sonnet, haiku/fable, pro/v4.1-flash/v4-pro), ' +
@@ -22,10 +26,7 @@ export const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        cwd: {
-          type: 'string',
-          description: 'Absolute path to the workspace/repository directory.',
-        },
+        cwd: CWD_PROP,
         to: { type: 'string', enum: TARGET_ENUM, description: 'Target harness ID.' },
         prompt: { type: 'string', description: 'Task instructions to send to the target harness.' },
         readonly: {
@@ -58,26 +59,32 @@ export const TOOLS = [
   {
     name: 'cospan_wait',
     description:
-      'Block quietly until a detached `cospan` job finishes (or `timeout` elapses), ' +
-      'then return its terminal status and deliverable output. ' +
-      'Exit code 2 (`status: "running"`) means still running—call `cospan_wait` again.',
+      'Block quietly until one (`id`) or multiple (`ids`, pure WaitAll / allSettled barrier) ' +
+      'detached `cospan` jobs finish (or `timeout` elapses), then return terminal status and ' +
+      'deliverable outputs. Exit code 2 (`status: "running"`) means still running—call ' +
+      '`cospan_wait` again.',
     inputSchema: {
       type: 'object',
       properties: {
-        cwd: {
-          type: 'string',
-          description: 'Absolute path to the workspace/repository directory.',
-        },
+        cwd: CWD_PROP,
         id: {
           type: 'string',
-          description: 'Job ID returned by `cospan_send` or `cospan_continue`.',
+          description: 'Single job ID returned by `cospan_send` or `cospan_continue`.',
+        },
+        ids: {
+          type: 'array',
+          items: { type: 'string' },
+          minItems: 1,
+          description:
+            'Batch WaitAll: list of job IDs to wait for together (allSettled barrier) when ' +
+            'the next step needs all parallel outputs before proceeding.',
         },
         timeout: {
           type: 'string',
           description: 'How long this wait call may block before returning status (default "20m").',
         },
       },
-      required: ['cwd', 'id'],
+      required: ['cwd'],
     },
   },
   {
@@ -88,10 +95,7 @@ export const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        cwd: {
-          type: 'string',
-          description: 'Absolute path to the workspace/repository directory.',
-        },
+        cwd: CWD_PROP,
         id: { type: 'string', description: 'Job ID to observe.' },
       },
       required: ['cwd', 'id'],
@@ -106,10 +110,7 @@ export const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        cwd: {
-          type: 'string',
-          description: 'Absolute path to the workspace/repository directory.',
-        },
+        cwd: CWD_PROP,
         id: { type: 'string', description: 'Previous job ID whose session should be resumed.' },
         last: {
           type: 'boolean',
@@ -139,10 +140,7 @@ export const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        cwd: {
-          type: 'string',
-          description: 'Absolute path to the workspace/repository directory.',
-        },
+        cwd: CWD_PROP,
         id: { type: 'string', description: 'Completed job ID.' },
       },
       required: ['cwd', 'id'],
@@ -154,10 +152,7 @@ export const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        cwd: {
-          type: 'string',
-          description: 'Absolute path to the workspace/repository directory.',
-        },
+        cwd: CWD_PROP,
         id: { type: 'string', description: 'Running job ID to cancel.' },
       },
       required: ['cwd', 'id'],
@@ -169,10 +164,7 @@ export const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        cwd: {
-          type: 'string',
-          description: 'Absolute path to the workspace/repository directory.',
-        },
+        cwd: CWD_PROP,
         id: { type: 'string', description: 'Optional job ID.' },
       },
       required: ['cwd'],
@@ -186,10 +178,7 @@ export const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        cwd: {
-          type: 'string',
-          description: 'Absolute path to the workspace/repository directory.',
-        },
+        cwd: CWD_PROP,
         to: { type: 'string', enum: TARGET_ENUM, description: 'Target harness ID.' },
         prompt: { type: 'string', description: 'Short question to ask.' },
         restricted: {
@@ -262,6 +251,23 @@ function formatTextOutcome(res, isError) {
   return { isError, content };
 }
 
+function parseWaitIds(args) {
+  const ids = [];
+  const push = (v) => {
+    const s = v === undefined || v === null ? '' : String(v).trim();
+    if (s) ids.push(s);
+  };
+  push(args.id);
+  if (args.ids !== undefined) {
+    if (!Array.isArray(args.ids)) {
+      return { error: 'cospan_wait: `ids` must be an array of job IDs' };
+    }
+    for (const item of args.ids) push(item);
+    if (!ids.length) return { error: 'cospan_wait: `ids` must contain at least one job ID' };
+  }
+  return { ids };
+}
+
 const TOOL_HANDLERS = {
   async cospan_send(cospanBin, args, cwd, env) {
     const cliArgs = ['send', '--to', String(args.to || ''), '--stdin', '--json'];
@@ -277,9 +283,9 @@ const TOOL_HANDLERS = {
   },
 
   async cospan_wait(cospanBin, args, cwd, env) {
-    const cliArgs = ['wait'];
-    if (args.id) cliArgs.push(String(args.id));
-    cliArgs.push('--timeout', String(args.timeout || '20m'));
+    const parsed = parseWaitIds(args);
+    if (parsed.error) return { isError: true, content: [{ type: 'text', text: parsed.error }] };
+    const cliArgs = ['wait', ...parsed.ids, '--timeout', String(args.timeout || '20m')];
     const res = await runCliAsync(cospanBin, cliArgs, { cwd, env });
     const status = EXIT_STATUS_LABELS[res.exitCode] || 'error';
     const header = `[cospan_wait exit_code=${res.exitCode} status=${status}]`;

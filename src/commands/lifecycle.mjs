@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { collectUniqueWaitIds, waitForBatchJobs } from '../batch-wait.mjs';
 import { processIdentity } from '../process-tree.mjs';
 import { DEFAULT_WAIT_TIMEOUT, die, durationToMs, JOB_EXIT_CODES } from '../cli-args.mjs';
 import { renderJobResponse } from '../job-diagnostics.mjs';
@@ -15,13 +16,17 @@ import {
 } from '../job-store.mjs';
 
 export async function cmdWait(opts) {
-  const id = opts._[0] || opts.id || null;
+  const ids = collectUniqueWaitIds(opts);
   const timeout = opts.timeout || DEFAULT_WAIT_TIMEOUT;
   const budget = durationToMs(timeout);
   if (!Number.isFinite(budget) || budget < 0)
     die(`invalid --timeout "${timeout}" (examples: 100s, 20m)`);
 
   let jobRoot = repoRoot();
+  if (ids.length > 1) {
+    return waitForBatchJobs(ids, { root: jobRoot, budget });
+  }
+  const id = ids[0] || null;
   const findTarget = () => {
     const found = lookupJob(id, jobRoot);
     if (found) jobRoot = found.root;

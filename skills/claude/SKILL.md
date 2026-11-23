@@ -22,9 +22,10 @@ Always prefer the bundled `cospan` MCP tools over raw shell command calls—they
    - **Models & effort (verbatim shortcut contract)**: pass user model shortcuts **verbatim** to `model` / `--model` (`sonnet`, `opus`, `haiku`, `fable`), pass explicit full model IDs or `<provider>/<model>` verbatim when specified, or omit `model` / `--model` when unspecified so `cospan` uses effective target defaults (`~/.cospan/config.json` and `<workspace>/.cospan/config.json` defaults; pass `inherit` to use Claude Code settings default). **Never guess or expand version numbers (such as `gpt-6.0-*`) or append effort suffixes (such as `-medium`) on the host side**—always pass reasoning effort separately via `effort` / `--effort` (supported `--effort`: `low`, `medium`, `high`, `xhigh`, `max`) and let `cospan` resolve shortcuts deterministically at runtime.
 
 2. **Collect (`cospan_wait`):**
-   Call MCP tool `cospan_wait` with `{ "cwd": "<workspace>", "id": "<job_id>", "timeout": "20m" }`.
-   - `cospan_wait` blocks quietly until the detached worker finishes and returns `status` + the full deliverable output in one shot.
-   - If `exit_code === 2` (`status === "running"`), call `cospan_wait` again.
+   Call MCP tool `cospan_wait` with `{ "cwd": "<workspace>", "id": "<job_id>", "timeout": "20m" }` (or `{ "cwd": "<workspace>", "ids": ["<id1>", "<id2>"], "timeout": "20m" }` for batch WaitAll).
+   - `cospan_wait` blocks quietly until the detached worker(s) finish and returns `status` + full deliverable outputs in one shot.
+   - **Batch vs. separate `cospan_wait`:** pass `ids: [id1, id2, ...]` when the next step needs all parallel outputs together (e.g., merging multi-module reviews or validating parallel subtasks together)—wakes the host only once. Issue separate `cospan_wait` calls when parallel jobs are independent with uneven runtimes (e.g., 2 min vs. 15 min) and you want to act on whichever finishes first.
+   - If `exit_code === 2` (`status === "running"`), call `cospan_wait` again (batch timeout returns bounded <= 8 KiB JSON without duplicating completed bodies).
    - If `exit_code === 5` (`status === "attention"`), ask the user before calling `cospan_continue`.
 
 3. **Follow-up / Peek / Fast Q&A:**
@@ -43,5 +44,5 @@ Always prefer the bundled `cospan` MCP tools over raw shell command calls—they
 Run unsandboxed in your workspace directory:
 ```bash
 node "<skill-dir>/../../bin/cospan.mjs" send --to claude [--readonly] --prompt "<task>"
-node "<skill-dir>/../../bin/cospan.mjs" wait <job-id> --timeout 10m
+node "<skill-dir>/../../bin/cospan.mjs" wait <job-id...> --timeout 10m
 ```

@@ -206,7 +206,9 @@ function writeStoredJobDeliverable(job, status) {
       (resumeCmd ? `<!-- interactive_resume: ${resumeCmd} -->\n` : '') +
       `\n`
   );
-  process.stdout.write(readTextRetry(job.result_file));
+  const body = readTextRetry(job.result_file);
+  process.stdout.write(body);
+  return body.endsWith('\n');
 }
 
 function writeMissingResultDiagnostics(job, status) {
@@ -216,6 +218,25 @@ function writeMissingResultDiagnostics(job, status) {
   );
   process.stdout.write(JSON.stringify(diagnosticPacket(job), null, 2) + '\n');
   if (status === 'crashed') process.stdout.write(`\n${CRASH_SANDBOX_HINT}\n`);
+}
+
+export function writeSettledJobResponse(initialJob, status) {
+  let job = initialJob;
+  if (job.status === 'running') {
+    try {
+      job = { ...job, ...JSON.parse(readTextRetry(job.result_file + '.status.json')) };
+    } catch {}
+  }
+  let trailingNewline = true;
+  if (fs.existsSync(job.result_file)) trailingNewline = writeStoredJobDeliverable(job, status);
+  else writeMissingResultDiagnostics(job, status);
+  if (status === 'done' && job.warnings) {
+    process.stderr.write(
+      `Job diagnostics (tail, up to 8192 bytes). Full log: ${job.log_file}\n` +
+        `${readTail(job.log_file)}\n`
+    );
+  }
+  return trailingNewline;
 }
 
 export function renderJobResponse(initial, { observeOnly = false, root = repoRoot() } = {}) {
@@ -238,18 +259,6 @@ export function renderJobResponse(initial, { observeOnly = false, root = repoRoo
     process.exitCode = JOB_EXIT_CODES[status] ?? 1;
     return;
   }
-  if (job.status === 'running') {
-    try {
-      job = { ...job, ...JSON.parse(readTextRetry(job.result_file + '.status.json')) };
-    } catch {}
-  }
-  if (fs.existsSync(job.result_file)) writeStoredJobDeliverable(job, status);
-  else writeMissingResultDiagnostics(job, status);
-  if (status === 'done' && job.warnings) {
-    process.stderr.write(
-      `Job diagnostics (tail, up to 8192 bytes). Full log: ${job.log_file}\n` +
-        `${readTail(job.log_file)}\n`
-    );
-  }
+  writeSettledJobResponse(job, status);
   process.exitCode = JOB_EXIT_CODES[status] ?? 1;
 }

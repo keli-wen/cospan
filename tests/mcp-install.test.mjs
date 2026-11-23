@@ -63,6 +63,10 @@ function assertRenderedCodexSkills(codexPkgRoot) {
     fs.readFileSync(path.join(codexPkgRoot, 'skills', 'agy', 'SKILL.md'), 'utf8'),
     /<skill-dir>\/\.\.\/\.\.\/bin\/cospan\.mjs/
   );
+  assert.match(
+    fs.readFileSync(path.join(codexPkgRoot, 'skills', 'agy', 'SKILL.md'), 'utf8'),
+    /Batch vs\. separate `cospan_wait`/
+  );
   const mcpDraw = fs.readFileSync(
     path.join(codexPkgRoot, 'skills', 'codex', 'references', 'draw.md'),
     'utf8'
@@ -84,6 +88,7 @@ function assertAgyDrawReference(agyPluginDir) {
   );
   assert.match(agyCodexSkill, /references\/draw\.md/);
   assert.match(agyCodexSkill, /only when explicitly requested via Codex/i);
+  assert.match(agyCodexSkill, /Batch vs\. separate `wait`/);
   const agyDraw = fs.readFileSync(
     path.join(agyPluginDir, 'skills', 'cospan-codex', 'references', 'draw.md'),
     'utf8'
@@ -97,39 +102,19 @@ function assertAgyDrawReference(agyPluginDir) {
 test('host installer mounts all detected targets and adheres to host schemas', async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cospan-install-'));
   try {
+    const mkTarget = (id, binary, version) => ({
+      id,
+      installed: true,
+      binary,
+      version,
+      phase: 1,
+      driverReady: true,
+    });
     const discovered = {
-      agy: {
-        id: 'agy',
-        installed: true,
-        binary: FAKE_AGY,
-        version: '1.5.5-fake',
-        phase: 1,
-        driverReady: true,
-      },
-      codex: {
-        id: 'codex',
-        installed: true,
-        binary: FAKE_CODEX,
-        version: '0.167.2-fake',
-        phase: 1,
-        driverReady: true,
-      },
-      claude: {
-        id: 'claude',
-        installed: true,
-        binary: FAKE_CLAUDE,
-        version: '2.1.322-fake',
-        phase: 1,
-        driverReady: true,
-      },
-      dsh: {
-        id: 'dsh',
-        installed: true,
-        binary: FAKE_DSH,
-        version: '0.2.2-rc.1-fake',
-        phase: 1,
-        driverReady: true,
-      },
+      agy: mkTarget('agy', FAKE_AGY, '1.5.5-fake'),
+      codex: mkTarget('codex', FAKE_CODEX, '0.167.2-fake'),
+      claude: mkTarget('claude', FAKE_CLAUDE, '2.1.322-fake'),
+      dsh: mkTarget('dsh', FAKE_DSH, '0.2.2-rc.1-fake'),
     };
 
     const agyPluginsRoot = path.join(tmp, 'agy-plugins');
@@ -300,7 +285,10 @@ test('stdio MCP server handles initialize, tools/list, cospan_send, and cospan_w
     assert.ok(sendTool);
     assert.match(sendTool.inputSchema.properties.model.description, /verbatim/i);
     assert.match(sendTool.inputSchema.properties.model.description, /never guess version numbers/i);
-    assert.ok(list.result.tools.some((t) => t.name === 'cospan_wait'));
+    const waitTool = list.result.tools.find((t) => t.name === 'cospan_wait');
+    assert.ok(waitTool);
+    assert.equal(waitTool.inputSchema.properties.ids.type, 'array');
+    assert.deepEqual(waitTool.inputSchema.required, ['cwd']);
 
     const sendCall = await rpc('tools/call', {
       name: 'cospan_send',
@@ -326,6 +314,26 @@ test('stdio MCP server handles initialize, tools/list, cospan_send, and cospan_w
     assert.equal(waitCall.result.isError, false);
     assert.match(waitCall.result.content[0].text, /exit_code=0 status=done/);
     assert.match(waitCall.result.content[0].text, /Verify MCP delegation path/);
+
+    const sendCall2 = await rpc('tools/call', {
+      name: 'cospan_send',
+      arguments: { cwd: repo, to: 'codex', readonly: true, prompt: 'Verify MCP batch wait' },
+    });
+    const sendInfo2 = JSON.parse(sendCall2.result.content[0].text);
+    const batchWait = await rpc('tools/call', {
+      name: 'cospan_wait',
+      arguments: { cwd: repo, ids: [sendInfo.job_id, sendInfo2.job_id], timeout: '10s' },
+    });
+    assert.equal(batchWait.result.isError, false);
+    assert.match(batchWait.result.content[0].text, /exit_code=0 status=done/);
+    assert.match(batchWait.result.content[0].text, /Verify MCP delegation path/);
+    assert.match(batchWait.result.content[0].text, /Verify MCP batch wait/);
+
+    const emptyBatch = await rpc('tools/call', {
+      name: 'cospan_wait',
+      arguments: { cwd: repo, ids: [], timeout: '5s' },
+    });
+    assert.equal(emptyBatch.result.isError, true);
 
     const prevHome = process.env.COSPAN_HOME;
     process.env.COSPAN_HOME = `${repo}-cfg`;

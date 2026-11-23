@@ -226,7 +226,7 @@ export function printHelp() {
     '  cospan continue (--id <job-id> | --last [--to <target>])',
     '    [--restricted|--unrestricted] [--timeout <dur>] [--model <id>] [--effort <lvl>]',
     '    (--prompt <t> | --prompt-file <p> | --stdin)',
-    '  cospan wait [<job-id>] [--timeout <dur>]',
+    '  cospan wait [<job-id>...] [--timeout <dur>]',
     '  cospan observe [<job-id>]',
     '  cospan result [<job-id>]',
     '  cospan cancel <job-id>',

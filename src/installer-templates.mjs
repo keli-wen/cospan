@@ -113,12 +113,22 @@ function renderAgyLaunchAndWaitSections(targetId, cmd, doc) {
     `the wait task:\n` +
     `   \`\`\`bash\n` +
     `   ${cmd} wait <job-id> --timeout 30m\n` +
+    `   # Or batch WaitAll across multiple parallel jobs (allSettled barrier):\n` +
+    `   ${cmd} wait <id1> <id2> --timeout 30m\n` +
     `   \`\`\`\n` +
+    `   - **Batch vs. separate \`wait\`:**\n` +
+    `     - **Batch (\`wait id1 id2 ...\`):** use when the next step needs all parallel ` +
+    `outputs together (e.g., merging multi-module reviews or validating parallel subtasks ` +
+    `together)—wakes the host only once.\n` +
+    `     - **Separate (\`wait id1\` & \`wait id2\`):** use when parallel jobs are independent ` +
+    `with uneven runtimes (e.g., 2 min vs. 15 min) and you want to act on whichever finishes ` +
+    `first.\n` +
     `3. **End your turn (call no more tools)** unless you have genuinely independent local ` +
     `work to do first. Antigravity will automatically wake you as soon as \`wait\` exits with ` +
     `the deliverable output!\n` +
     `4. Exit codes of \`wait\`: \`0\` = done (stdout has the full report), \`2\` = still running ` +
-    `(launch \`wait\` again), \`3\` = error, \`4\` = canceled, \`5\` = timed out with a ` +
+    `(launch \`wait\` again; batch timeout emits bounded <= 8 KiB status JSON without ` +
+    `duplicating completed bodies), \`3\` = error, \`4\` = canceled, \`5\` = timed out with a ` +
     `resumable session (ask the user before continuing).\n\n`
   );
 }
@@ -188,8 +198,11 @@ export function renderAgyHostJobsSkill({ cospanBin }) {
     `# cospan-jobs (Antigravity Host Protocol)\n\n` +
     `Manage detached \`cospan\` jobs and trajectories recorded for the current workspace ` +
     `(stored out-of-tree under \`~/.cospan/trajectories/\`):\n\n` +
-    `- \`${cmd} wait <id> --timeout 30m\` — run via \`run_command\` with ` +
-    `\`WaitMsBeforeAsync: 500\` and stop calling tools so Antigravity wakes you on completion.\n` +
+    `- \`${cmd} wait <id...> --timeout 30m\` — run via \`run_command\` with ` +
+    `\`WaitMsBeforeAsync: 500\` and stop calling tools so Antigravity wakes you on completion ` +
+    `(pass multiple IDs for a pure WaitAll barrier when all parallel outputs are needed ` +
+    `together; use separate \`wait\` calls when runtimes are uneven and you want to act on ` +
+    `whichever finishes first).\n` +
     `- \`${cmd} observe <id>\` — immediate <= 8 KiB JSON activity snapshot with \`phase\` and ` +
     `\`touched_files\` (never consumes \`result\`).\n` +
     `- \`${cmd} result <id>\` — print stored deliverable of a completed job.\n` +
@@ -254,10 +267,18 @@ function renderCodexMcpDetails(targetId, doc) {
     `   - ${formatModelsContractNote(targetId, doc)}\n\n` +
     `2. **Collect (\`cospan_wait\`):**\n` +
     `   Call MCP tool \`cospan_wait\` with ` +
-    `\`{ "cwd": "<workspace>", "id": "<job_id>", "timeout": "20m" }\`.\n` +
-    `   - \`cospan_wait\` blocks quietly until the detached worker finishes and returns ` +
-    `\`status\` + the full deliverable output in one shot.\n` +
-    `   - If \`exit_code === 2\` (\`status === "running"\`), call \`cospan_wait\` again.\n` +
+    `\`{ "cwd": "<workspace>", "id": "<job_id>", "timeout": "20m" }\` (or ` +
+    `\`{ "cwd": "<workspace>", "ids": ["<id1>", "<id2>"], "timeout": "20m" }\` for batch ` +
+    `WaitAll).\n` +
+    `   - \`cospan_wait\` blocks quietly until the detached worker(s) finish and returns ` +
+    `\`status\` + full deliverable outputs in one shot.\n` +
+    `   - **Batch vs. separate \`cospan_wait\`:** pass \`ids: [id1, id2, ...]\` when the next ` +
+    `step needs all parallel outputs together (e.g., merging multi-module reviews or validating ` +
+    `parallel subtasks together)—wakes the host only once. Issue separate \`cospan_wait\` calls ` +
+    `when parallel jobs are independent with uneven runtimes (e.g., 2 min vs. 15 min) and you ` +
+    `want to act on whichever finishes first.\n` +
+    `   - If \`exit_code === 2\` (\`status === "running"\`), call \`cospan_wait\` again ` +
+    `(batch timeout returns bounded <= 8 KiB JSON without duplicating completed bodies).\n` +
     `   - If \`exit_code === 5\` (\`status === "attention"\`), ask the user before calling ` +
     `\`cospan_continue\`.\n\n` +
     `3. **Follow-up / Peek / Fast Q&A:**\n` +
@@ -311,7 +332,7 @@ export function renderCodexHostTargetSkill({ targetId, cospanBin }) {
     `## 2. CLI Fallback (only if \`cospan\` MCP server is unavailable)\n\n` +
     `Run unsandboxed in your workspace directory:\n` +
     `\`\`\`bash\n${cmd} send --to ${targetId} [--readonly] --prompt "<task>"\n` +
-    `${cmd} wait <job-id> --timeout 10m\n\`\`\`\n` +
+    `${cmd} wait <job-id...> --timeout 10m\n\`\`\`\n` +
     drawSection
   );
 }
@@ -323,8 +344,9 @@ export function renderCodexHostJobsSkill() {
     `# cospan:jobs (Codex Host Protocol)\n\n` +
     `Use the \`cospan\` MCP tools with \`cwd\` set to your active workspace root ` +
     `(state & trajectories live under \`~/.cospan/trajectories/\`):\n` +
-    `- \`cospan_wait\` — block cleanly on a running \`job_id\` ` +
-    `and return the final deliverable.\n` +
+    `- \`cospan_wait\` — block cleanly on a single \`id\` or batch WaitAll \`ids: [...]\` ` +
+    `(batch when all parallel outputs are needed together; separate calls when runtimes are ` +
+    `uneven and you want to act on whichever finishes first).\n` +
     `- \`cospan_observe\` — bounded <= 8 KiB JSON progress snapshot without reading the full ` +
     `result body.\n` +
     `- \`cospan_continue\` — continue a prior \`job_id\`'s native conversation thread ` +

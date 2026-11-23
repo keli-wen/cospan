@@ -16,10 +16,25 @@ const EFFORT_FAMILIES = new Set([
 ]);
 
 const XHIGH_EFFORT_FAMILIES = new Set(['gemini-4-neon', 'gemini-4-hydrogen']);
+const VERSIONED_EFFORT_FAMILY_RE = /^gemini-\d|^claude-(?:opus|sonnet|haiku)-/i;
+const VERSIONED_GEMINI_FAMILY_RE = /^gemini-\d/i;
+const EFFORT_SUFFIX_RE = /^(.*)-(low|medium|high|xhigh)$/i;
 const SUPPORTED_FAMILY_EFFORTS = ['low', 'medium', 'high'];
 const MAX_ERROR_LINE = 64 * 1024;
 const MAX_ERRORS = 3;
 const FINISHED_REASONS = new Set(['print_timeout', 'interrupted', 'error']);
+
+export function isAgyEffortFamily(name) {
+  if (typeof name !== 'string' || !name) return false;
+  return EFFORT_FAMILIES.has(name.toLowerCase()) || VERSIONED_EFFORT_FAMILY_RE.test(name);
+}
+
+function allowsAgyXhigh(family) {
+  const lower = family.toLowerCase();
+  if (XHIGH_EFFORT_FAMILIES.has(lower)) return true;
+  if (EFFORT_FAMILIES.has(lower)) return false;
+  return VERSIONED_GEMINI_FAMILY_RE.test(family);
+}
 
 function normalizeEffortForFamily(effort, fallback = 'low', { allowXhigh = false } = {}) {
   if (!effort) return fallback;
@@ -47,7 +62,7 @@ function normalizeEffortForFamily(effort, fallback = 'low', { allowXhigh = false
 
 function formatFamilyWithEffort(family, effort, fallback) {
   const normalized = normalizeEffortForFamily(effort, fallback, {
-    allowXhigh: XHIGH_EFFORT_FAMILIES.has(family),
+    allowXhigh: allowsAgyXhigh(family),
   });
   return `${family}-${normalized}`;
 }
@@ -59,12 +74,14 @@ function pickDefaultAgyBase(defaults, kind) {
 
 function resolveAgyFamilyAndEffort(mapped, effort, defaults) {
   const fallbackEffort = defaults.effort || 'medium';
-  if (EFFORT_FAMILIES.has(mapped)) {
-    return formatFamilyWithEffort(mapped, effort, fallbackEffort);
+  const suffixMatch = EFFORT_SUFFIX_RE.exec(mapped);
+  if (suffixMatch) {
+    const baseFamily = suffixMatch[1];
+    if (!effort || !isAgyEffortFamily(baseFamily)) return mapped;
+    return formatFamilyWithEffort(baseFamily, effort, suffixMatch[2].toLowerCase());
   }
-  const suffixMatch = /^(.*)-(low|medium|high|xhigh)$/.exec(mapped);
-  if (suffixMatch && effort && EFFORT_FAMILIES.has(suffixMatch[1])) {
-    return formatFamilyWithEffort(suffixMatch[1], effort, suffixMatch[2]);
+  if (isAgyEffortFamily(mapped)) {
+    return formatFamilyWithEffort(mapped, effort, fallbackEffort);
   }
   return mapped;
 }

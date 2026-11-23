@@ -5,7 +5,7 @@ import {
   resolveAgyModel,
 } from './agy-protocol.mjs';
 
-export { createAgyErrorCollector, resolveAgyModel } from './agy-protocol.mjs';
+export { createAgyErrorCollector, isAgyEffortFamily, resolveAgyModel } from './agy-protocol.mjs';
 
 function parseAgyJsonStdout(stdout) {
   const trimmed = (stdout || '').trim();

@@ -79,4 +79,27 @@ Use the matching template in [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/
    - Start with a plain-language **TL;DR** and a small **Before → After** CUJ example so a reviewer understands the user-visible impact in 10 seconds.
    - **Never narrate the diff** (no file-by-file summaries or internal function lists)—agents and reviewers inspect the git diff for implementation details; keep the PR body strictly to incremental value (intent, examples, non-obvious trade-offs/boundaries, linked issues, and verification).
    - Link related issues (`Fixes #N` / `Closes #N` / `Relates to #N`) and paste **actual observed verification results** (commands run, test pass/skip counts, and any manual/real-OS checks).
-4. Never commit local trajectory artifacts (`~/.cospan/`), `.env` files, or unrelated scratch directories.
+4. **Apply GitHub labels (`--label`) on every PR and issue:** pick one **Type** label (`bug`, `feature`, `docs`, `chore`, or `tracking`) plus every affected **Area** label (`core`, `drivers`, `hosts`)—for example, `bug,core` for a CLI runtime fix, `chore,docs` for template/doc updates, or `chore` + all affected areas for a release PR.
+5. Never commit local trajectory artifacts (`~/.cospan/`), `.env` files, or unrelated scratch directories.
+
+---
+
+## 5. Release Checklist
+
+Follow this deterministic checklist when cutting a `vX.Y.Z` release (see [`docs/releases/README.md`](docs/releases/README.md) for header-image and upgrade-block conventions):
+
+1. **Sync & branch:** Fast-forward `master` to `origin/master` and create `chore/release-vX.Y.Z`.
+2. **Bump version across all 8 locations** (enforced by `tests/update-check.test.mjs`):
+   - `package.json` and `package-lock.json` (both top-level `"version"` and `packages[""].version`)
+   - `.antigravity-plugin/plugin.json`, `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json`, and `dsh/package.json`
+   - Runtime version fallback literals in `src/mcp/cospan-mcp.mjs` and `src/update-check.mjs`
+3. **Header illustration & release notes:**
+   - Generate `releases/assets/cospan-X.Y.Z-overview.png` (`3:2` Pixel Blueprint, layout matched to release scope) via `cospan-codex` (`--effort low`), visually inspect the saved PNG for text and layout accuracy, and record the prompt metadata in `releases/assets/prompt.json`.
+   - Create `docs/releases/vX.Y.Z.md` (header image + `cospan-codex` attribution, `## Highlights`, `### What's New`, `## Validation`, and agent-first `## Upgrade` pinned to `vX.Y.Z`) and prepend the release to `docs/releases/README.md`.
+4. **Verify & open the Release PR:**
+   - Run `node bin/cospan.mjs install` (plus `npm run sync:ui` if UI assets changed), `npm run lint`, `npm run format:check`, `npm test`, and `node bin/cospan.mjs doctor --check`.
+   - Open `chore(release): cospan vX.Y.Z — <headline>` with labels `chore` + affected areas (`core`, `drivers`, `hosts`). Approve gated `Tests (Windows)` CI before merging whenever the release includes runtime, lifecycle, locking, or OS-path changes.
+5. **Tag & publish GitHub Release (after merge):**
+   - Squash-merge the release PR, fast-forward `master`, and push an annotated tag:
+     `git tag -a vX.Y.Z -m "cospan vX.Y.Z" && git push origin vX.Y.Z`
+   - Publish the GitHub Release via `gh release create vX.Y.Z --title "cospan vX.Y.Z — <headline>" ...`, rewriting the relative header image link to `https://raw.githubusercontent.com/keli-wen/cospan/vX.Y.Z/releases/assets/cospan-X.Y.Z-overview.png` so it renders on GitHub's Releases page.

@@ -17,9 +17,9 @@ const DEFAULT_FETCH_TIMEOUT_MS = 1500;
 function readPackageVersion() {
   try {
     const pkg = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8'));
-    return typeof pkg?.version === 'string' && pkg.version.trim() ? pkg.version.trim() : '0.1.2';
+    return typeof pkg?.version === 'string' && pkg.version.trim() ? pkg.version.trim() : '0.1.3';
   } catch {
-    return '0.1.2';
+    return '0.1.3';
   }
 }
 

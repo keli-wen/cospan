@@ -605,9 +605,18 @@ const CospanBoard = (function () {
     if (!container) throw new Error('CospanBoard.mount requires a container element');
     const host = adapter && adapter.host === 'dsh' ? 'dsh' : 'agy';
     const initial = (adapter && adapter.getInitialState && adapter.getInitialState()) || {};
+    const runningPollMs =
+      adapter && Number.isFinite(adapter.runningPollMs) && adapter.runningPollMs > 0
+        ? adapter.runningPollMs
+        : RUNNING_POLL_MS;
+    const idlePollMs =
+      adapter && Number.isFinite(adapter.idlePollMs) && adapter.idlePollMs > 0
+        ? adapter.idlePollMs
+        : IDLE_POLL_MS;
 
     const state = {
       destroyed: false,
+      hostVisible: initial.visible !== false,
       lang: readSavedLang(),
       capExpanded: readSavedCapOpen(),
       scope: 'workspace',
@@ -621,6 +630,9 @@ const CospanBoard = (function () {
       manualRefreshing: false,
       inFlight: false,
       queuedRefresh: false,
+      needsRefreshOnVisible: false,
+      refreshEpoch: 0,
+      sessionEpoch: 0,
       expanded: new Set(),
       expandedBlocks: new Set(),
       details: new Map(),
@@ -772,31 +784,54 @@ const CospanBoard = (function () {
     async function loadDetail(jobId, force) {
       if (state.destroyed || !adapter || !adapter.fetchDetail) return;
       if (state.detailLoading.has(jobId) && !force) return;
+      const reqSessionEpoch = state.sessionEpoch;
       state.detailLoading.add(jobId);
       try {
         const detail = await adapter.fetchDetail(jobId);
-        if (!state.destroyed && detail && detail.ok !== false) {
+        if (
+          !state.destroyed &&
+          reqSessionEpoch === state.sessionEpoch &&
+          detail &&
+          detail.ok !== false
+        ) {
           state.details.set(jobId, detail);
           renderCardById(jobId);
         }
       } catch {
         /* ignore */
       }
-      state.detailLoading.delete(jobId);
+      if (reqSessionEpoch === state.sessionEpoch) {
+        state.detailLoading.delete(jobId);
+      }
     }
 
     async function handleCancel(jobId) {
       if (state.destroyed || !adapter || !adapter.cancelJob || state.canceling.has(jobId)) return;
+      const reqSessionEpoch = state.sessionEpoch;
       state.canceling.add(jobId);
       renderCardById(jobId);
       try {
         const res = await adapter.cancelJob(jobId);
-        if (res && res.ok === false && res.message) state.error = res.message;
+        if (
+          !state.destroyed &&
+          reqSessionEpoch === state.sessionEpoch &&
+          res &&
+          res.ok === false &&
+          res.message
+        ) {
+          state.error = res.message;
+        }
       } catch (err) {
-        state.error = (err && err.message) || 'Failed to cancel task.';
+        if (!state.destroyed && reqSessionEpoch === state.sessionEpoch) {
+          state.error = (err && err.message) || 'Failed to cancel task.';
+        }
       } finally {
-        state.canceling.delete(jobId);
-        await refresh();
+        if (reqSessionEpoch === state.sessionEpoch) {
+          state.canceling.delete(jobId);
+          if (isEffectivelyVisible()) {
+            await refresh();
+          }
+        }
       }
     }
 
@@ -1280,13 +1315,53 @@ const CospanBoard = (function () {
       }
     }
 
+    function isEffectivelyVisible() {
+      if (state.destroyed || !state.hostVisible) return false;
+      if (typeof document !== 'undefined' && document.hidden) return false;
+      return true;
+    }
+
+    function stopTimers() {
+      if (state.pollTimer) {
+        clearTimeout(state.pollTimer);
+        state.pollTimer = null;
+      }
+      if (state.tickTimer) {
+        clearInterval(state.tickTimer);
+        state.tickTimer = null;
+      }
+    }
+
+    function resetSessionViewState() {
+      state.sessionEpoch += 1;
+      state.refreshEpoch += 1;
+      state.expanded.clear();
+      state.expandedBlocks.clear();
+      state.details.clear();
+      state.detailLoading.clear();
+      state.canceling.clear();
+      state.jobs = [];
+      state.workspace = '';
+      state.notice = '';
+      state.error = '';
+    }
+
     function scheduleNextPoll() {
-      if (state.pollTimer) clearTimeout(state.pollTimer);
-      if (state.destroyed) return;
+      if (state.pollTimer) {
+        clearTimeout(state.pollTimer);
+        state.pollTimer = null;
+      }
+      if (!isEffectivelyVisible()) {
+        stopTimers();
+        return;
+      }
       const hasRunning = state.jobs.some((j) => j.status === 'running');
       state.pollTimer = setTimeout(
-        () => void refresh(),
-        hasRunning ? RUNNING_POLL_MS : IDLE_POLL_MS
+        () => {
+          state.pollTimer = null;
+          void refresh();
+        },
+        hasRunning ? runningPollMs : idlePollMs
       );
 
       if (hasRunning && !state.tickTimer) {
@@ -1305,16 +1380,35 @@ const CospanBoard = (function () {
       }
     }
 
-    async function refresh() {
+    async function refresh(options) {
+      const force = Boolean(options && options.force);
       if (state.destroyed || !adapter || !adapter.fetchBoard) return;
+      if (!force && !isEffectivelyVisible()) {
+        state.needsRefreshOnVisible = true;
+        stopTimers();
+        return;
+      }
       if (state.inFlight) {
         state.queuedRefresh = true;
         return;
       }
+      if (state.pollTimer) {
+        clearTimeout(state.pollTimer);
+        state.pollTimer = null;
+      }
       state.inFlight = true;
+      state.needsRefreshOnVisible = false;
+      const reqEpoch = ++state.refreshEpoch;
+      const reqSessionEpoch = state.sessionEpoch;
       try {
         const board = await adapter.fetchBoard({ scope: state.scope });
-        if (state.destroyed) return;
+        if (
+          state.destroyed ||
+          reqEpoch !== state.refreshEpoch ||
+          reqSessionEpoch !== state.sessionEpoch
+        ) {
+          return;
+        }
         const prevStatuses = new Map(state.jobs.map((j) => [j.id, j.status]));
         state.jobs = Array.isArray(board && board.jobs) ? board.jobs : [];
         state.workspace = (board && board.workspace) || state.workspace;
@@ -1333,23 +1427,36 @@ const CospanBoard = (function () {
 
         renderAll();
 
-        for (const id of state.expanded) {
-          const job = state.jobs.find((j) => j.id === id);
-          if (!job) continue;
-          const prev = prevStatuses.get(id);
-          if (!state.details.has(id) || job.status === 'running' || prev !== job.status) {
-            void loadDetail(id, true);
+        if (isEffectivelyVisible()) {
+          for (const id of state.expanded) {
+            const job = state.jobs.find((j) => j.id === id);
+            if (!job) continue;
+            const prev = prevStatuses.get(id);
+            if (!state.details.has(id) || job.status === 'running' || prev !== job.status) {
+              void loadDetail(id, true);
+            }
           }
         }
       } catch (err) {
-        if (!state.destroyed) {
+        if (
+          !state.destroyed &&
+          reqEpoch === state.refreshEpoch &&
+          reqSessionEpoch === state.sessionEpoch &&
+          !(err && err.name === 'AbortError')
+        ) {
           state.error = (err && err.message) || 'Unable to load workspace tasks.';
           renderHeaderAndCaps();
         }
       } finally {
-        state.inFlight = false;
-        if (!state.destroyed) {
-          if (state.queuedRefresh) {
+        if (reqEpoch === state.refreshEpoch) {
+          state.inFlight = false;
+          if (state.destroyed) {
+            stopTimers();
+          } else if (!isEffectivelyVisible()) {
+            state.queuedRefresh = false;
+            state.needsRefreshOnVisible = true;
+            stopTimers();
+          } else if (state.queuedRefresh) {
             state.queuedRefresh = false;
             void refresh();
           } else {
@@ -1366,7 +1473,7 @@ const CospanBoard = (function () {
       renderHeaderAndCaps();
       const minSpin = new Promise((resolve) => setTimeout(resolve, 560));
       try {
-        await Promise.all([refresh(), minSpin]);
+        await Promise.all([refresh({ force: true }), minSpin]);
       } finally {
         if (!state.destroyed) {
           state.manualRefreshing = false;
@@ -1375,13 +1482,35 @@ const CospanBoard = (function () {
       }
     }
 
+    let lastEffectiveVisible = isEffectivelyVisible();
+    function handleVisibilityTransition() {
+      const nowVisible = isEffectivelyVisible();
+      if (nowVisible === lastEffectiveVisible) return;
+      lastEffectiveVisible = nowVisible;
+      if (!nowVisible) {
+        state.refreshEpoch += 1;
+        state.inFlight = false;
+        state.queuedRefresh = false;
+        state.needsRefreshOnVisible = true;
+        stopTimers();
+        return;
+      }
+      void refresh();
+    }
+
+    const onDocumentVisibilityChange = () => {
+      if (state.destroyed) return;
+      handleVisibilityTransition();
+    };
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+      document.addEventListener('visibilitychange', onDocumentVisibilityChange);
+    }
+
     const unsubscribe =
       adapter && adapter.subscribe
         ? adapter.subscribe((update) => {
             if (state.destroyed) return;
-            if (update && update.workspaceLabel !== undefined) {
-              state.workspace = update.workspaceLabel || '';
-            }
+            let dataChanged = false;
             if (
               update &&
               update.sessionId !== undefined &&
@@ -1389,23 +1518,59 @@ const CospanBoard = (function () {
             ) {
               state.callerSessionId = update.sessionId || null;
               state.userPinnedScope = false;
+              resetSessionViewState();
+              dataChanged = true;
             }
-            void refresh();
+            if (update && update.workspaceLabel !== undefined) {
+              const nextWs = update.workspaceLabel || '';
+              if (nextWs !== state.workspace) {
+                state.workspace = nextWs;
+                dataChanged = true;
+              }
+            }
+            if (update && update.visible !== undefined) {
+              state.hostVisible = Boolean(update.visible);
+            }
+            if (dataChanged) renderAll();
+            const prevVisible = lastEffectiveVisible;
+            handleVisibilityTransition();
+            if (dataChanged && prevVisible && isEffectivelyVisible()) {
+              if (state.inFlight) {
+                state.inFlight = false;
+                state.queuedRefresh = false;
+              }
+              void refresh();
+            } else if (dataChanged && !isEffectivelyVisible()) {
+              state.needsRefreshOnVisible = true;
+              stopTimers();
+            }
           })
         : null;
 
     renderAll();
-    void refresh();
+    if (isEffectivelyVisible()) {
+      void refresh();
+    } else {
+      state.needsRefreshOnVisible = true;
+    }
 
     return {
       refresh,
       setScope(nextScope) {
         applyScopeSelection(nextScope, true);
       },
+      setVisible(nextVisible) {
+        if (state.destroyed) return;
+        state.hostVisible = Boolean(nextVisible);
+        handleVisibilityTransition();
+      },
       destroy() {
         state.destroyed = true;
-        if (state.pollTimer) clearTimeout(state.pollTimer);
-        if (state.tickTimer) clearInterval(state.tickTimer);
+        state.queuedRefresh = false;
+        stopTimers();
+        if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
+          document.removeEventListener('visibilitychange', onDocumentVisibilityChange);
+        }
         if (typeof unsubscribe === 'function') unsubscribe();
         container.textContent = '';
       },

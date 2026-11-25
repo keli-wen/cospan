@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { callTool, TOOLS } from '../src/mcp/tools.mjs';
 import { cancelBoardJob, listWorkspaceBoard, readBoardJobDetail } from '../src/sidebar-state.mjs';
+import { registerCospanHttpApi } from './http-api.mjs';
 
 const DSH_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(DSH_DIR, '..');
@@ -244,6 +245,10 @@ export function apply(ctx) {
 
   ctx.inject(['commands'], (cmdCtx) => {
     registerCospanCtlCommand(cmdCtx);
+  });
+
+  ctx.inject(['webServer'], (webCtx) => {
+    registerCospanHttpApi(webCtx);
   });
 }
 

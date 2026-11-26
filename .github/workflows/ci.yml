@@ -45,4 +45,4 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       # Per-test timeout prevents a hung worker or child from stalling the whole 30m job.
-      - run: node --test --test-timeout=60000 tests/*.test.mjs
+      - run: node tests/run.mjs --test-timeout=60000

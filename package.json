@@ -67,7 +67,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "sync:ui": "node src/ui/sync-dsh-client.mjs",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node tests/run.mjs"
   },
   "engines": {
     "node": ">=20"

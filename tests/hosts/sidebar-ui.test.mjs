@@ -4,19 +4,20 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { apply as applyDshPlugin } from '../dsh/index.mjs';
-import { installForAgyHost } from '../src/installer.mjs';
-import { updateState } from '../src/job-store.mjs';
-import { cancelBoardJob, listWorkspaceBoard, readBoardJobDetail } from '../src/sidebar-state.mjs';
-import { startSidecarServer } from '../src/sidecar/server.mjs';
-import { buildDshClientBundle, syncDshClient } from '../src/ui/sync-dsh-client.mjs';
+import { pathToFileURL } from 'node:url';
+import { apply as applyDshPlugin } from '../../dsh/index.mjs';
+import { installForAgyHost } from '../../src/installer.mjs';
+import { updateState } from '../../src/job-store.mjs';
+import {
+  cancelBoardJob,
+  listWorkspaceBoard,
+  readBoardJobDetail,
+} from '../../src/sidebar-state.mjs';
+import { startSidecarServer } from '../../src/sidecar/server.mjs';
+import { buildDshClientBundle, syncDshClient } from '../../src/ui/sync-dsh-client.mjs';
+import { COSPAN_BIN as BIN, FAKE_FILES, ROOT_DIR } from '../helpers/paths.mjs';
 
-const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
-const ROOT_DIR = path.resolve(TEST_DIR, '..');
-const BIN = path.join(ROOT_DIR, 'bin', 'cospan.mjs');
-const FAKE_AGY = path.join(TEST_DIR, 'fakes', 'fake-agy.mjs');
-const FAKE_CODEX = path.join(TEST_DIR, 'fakes', 'fake-codex.mjs');
+const { agy: FAKE_AGY, codex: FAKE_CODEX } = FAKE_FILES;
 
 async function withTempWorkspace(fn) {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'cospan-sidebar-'));

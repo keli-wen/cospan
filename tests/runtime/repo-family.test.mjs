@@ -4,23 +4,24 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-import { apply as applyDshPlugin } from '../dsh/index.mjs';
-import { terminateVerifiedWorker } from '../src/commands/lifecycle.mjs';
-import { pidAlive } from '../src/job-store.mjs';
-import { processIdentity } from '../src/process-tree.mjs';
+import { apply as applyDshPlugin } from '../../dsh/index.mjs';
+import { terminateVerifiedWorker } from '../../src/commands/lifecycle.mjs';
+import { pidAlive } from '../../src/job-store.mjs';
+import { processIdentity } from '../../src/process-tree.mjs';
 import {
   clearRepoFamilyCaches,
   gitCommonDir,
   registerRepoTrajectory,
   repoIndexFilePath,
-} from '../src/repo-family.mjs';
-import { cancelBoardJob, listWorkspaceBoard, readBoardJobDetail } from '../src/sidebar-state.mjs';
+} from '../../src/repo-family.mjs';
+import {
+  cancelBoardJob,
+  listWorkspaceBoard,
+  readBoardJobDetail,
+} from '../../src/sidebar-state.mjs';
+import { COSPAN_BIN as BIN, FAKE_FILES } from '../helpers/paths.mjs';
 
-const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
-const BIN = path.resolve(TEST_DIR, '..', 'bin', 'cospan.mjs');
-const FAKE_AGY = path.join(TEST_DIR, 'fakes', 'fake-agy.mjs');
-const FAKE_CODEX = path.join(TEST_DIR, 'fakes', 'fake-codex.mjs');
+const { agy: FAKE_AGY, codex: FAKE_CODEX } = FAKE_FILES;
 
 function runGit(args, cwd) {
   const r = spawnSync('git', args, { cwd, encoding: 'utf8' });

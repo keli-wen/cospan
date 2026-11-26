@@ -2,19 +2,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
+import { COSPAN_BIN, FAKE_FILES, MCP_SERVER, ROOT_DIR } from './paths.mjs';
 
-const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
-
-export const ROOT_DIR = path.resolve(TEST_DIR, '..');
-export const COSPAN_BIN = path.join(ROOT_DIR, 'bin', 'cospan.mjs');
-export const MCP_SERVER = path.join(ROOT_DIR, 'src', 'mcp', 'cospan-mcp.mjs');
-export const FAKE_FILES = {
-  agy: path.join(TEST_DIR, 'fakes', 'fake-agy.mjs'),
-  codex: path.join(TEST_DIR, 'fakes', 'fake-codex.mjs'),
-  claude: path.join(TEST_DIR, 'fakes', 'fake-claude.mjs'),
-  dsh: path.join(TEST_DIR, 'fakes', 'fake-dsh.mjs'),
-};
+export { COSPAN_BIN, FAKE_FILES, MCP_SERVER, ROOT_DIR };
 export const TARGET_BIN_ENV_VARS = ['AGY_BIN', 'CODEX_BIN', 'CLAUDE_BIN', 'DSH_BIN'];
 export const WIN_ONLY = { skip: process.platform !== 'win32', timeout: 60000 };
 

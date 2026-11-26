@@ -4,8 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-import { repoRoot } from '../src/job-store.mjs';
+import { repoRoot } from '../../src/job-store.mjs';
 import {
   bornAfterParent,
   parseBorn,
@@ -16,10 +15,8 @@ import {
   stopExecution,
   tree,
   windowsProcessTable,
-} from '../src/process-tree.mjs';
-
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const SRC_DIR = path.resolve(HERE, '..', 'src');
+} from '../../src/process-tree.mjs';
+import { SRC_DIR } from '../helpers/paths.mjs';
 
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 

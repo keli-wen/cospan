@@ -4,7 +4,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 import {
   durationToMs,
   JOB_EXIT_CODES,
@@ -12,19 +11,14 @@ import {
   parseCliArgs,
   repoRoot,
   workspaceStateDir,
-} from '../src/cli.mjs';
-import { installForAgyHost, installForCodexHost } from '../src/installer.mjs';
-import { TARGET_MODEL_SHORTCUTS } from '../src/config.mjs';
-import { listWorkspaceBoard } from '../src/sidebar-state.mjs';
-import { apply as applyDshPlugin } from '../dsh/index.mjs';
+} from '../../src/cli.mjs';
+import { installForAgyHost, installForCodexHost } from '../../src/installer.mjs';
+import { TARGET_MODEL_SHORTCUTS } from '../../src/config.mjs';
+import { listWorkspaceBoard } from '../../src/sidebar-state.mjs';
+import { apply as applyDshPlugin } from '../../dsh/index.mjs';
+import { FAKE_FILES, MCP_SERVER } from '../helpers/paths.mjs';
 
-const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
-const ROOT_DIR = path.resolve(TEST_DIR, '..');
-const MCP_SERVER = path.join(ROOT_DIR, 'src', 'mcp', 'cospan-mcp.mjs');
-const FAKE_AGY = path.join(TEST_DIR, 'fakes', 'fake-agy.mjs');
-const FAKE_CODEX = path.join(TEST_DIR, 'fakes', 'fake-codex.mjs');
-const FAKE_CLAUDE = path.join(TEST_DIR, 'fakes', 'fake-claude.mjs');
-const FAKE_DSH = path.join(TEST_DIR, 'fakes', 'fake-dsh.mjs');
+const { agy: FAKE_AGY, codex: FAKE_CODEX, claude: FAKE_CLAUDE, dsh: FAKE_DSH } = FAKE_FILES;
 
 function assertVerbatimSkillContract(skillText, targetId) {
   const frontmatterMatch = /^---\n([\s\S]*?)\n---\n/.exec(skillText);

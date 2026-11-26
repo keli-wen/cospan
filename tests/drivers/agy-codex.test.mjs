@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { agyDriver, resolveAgyModel } from '../src/drivers/agy.mjs';
-import { codexDriver, resolveCodexModelAndEffort } from '../src/drivers/codex.mjs';
-import { BUILTIN_CONFIG } from '../src/targets.mjs';
+import { agyDriver, resolveAgyModel } from '../../src/drivers/agy.mjs';
+import { codexDriver, resolveCodexModelAndEffort } from '../../src/drivers/codex.mjs';
+import { BUILTIN_CONFIG } from '../../src/targets.mjs';
 
 test('agy model resolution: gemini-3.8-flash-medium default, mappings, and overrides', () => {
   const emptyCfg = { defaults: {}, mappings: {} };

@@ -3,18 +3,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { checkTargetCliContract } from '../src/contract-check.mjs';
-import { claudeDriver, resolveClaudeModelAndEffort } from '../src/drivers/claude.mjs';
-import { dshDriver, resolveDshModelAndEffort } from '../src/drivers/dsh.mjs';
-import { extractDshAgentDefaultModelFromText } from '../src/drivers/dsh-protocol.mjs';
-import { listActiveTargetIds } from '../src/drivers/index.mjs';
+import { checkTargetCliContract } from '../../src/contract-check.mjs';
+import { claudeDriver, resolveClaudeModelAndEffort } from '../../src/drivers/claude.mjs';
+import { dshDriver, resolveDshModelAndEffort } from '../../src/drivers/dsh.mjs';
+import { extractDshAgentDefaultModelFromText } from '../../src/drivers/dsh-protocol.mjs';
+import { listActiveTargetIds } from '../../src/drivers/index.mjs';
+import { FAKE_FILES } from '../helpers/paths.mjs';
 
-const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
-const FAKE_AGY = path.join(TEST_DIR, 'fakes', 'fake-agy.mjs');
-const FAKE_CODEX = path.join(TEST_DIR, 'fakes', 'fake-codex.mjs');
-const FAKE_CLAUDE = path.join(TEST_DIR, 'fakes', 'fake-claude.mjs');
-const FAKE_DSH = path.join(TEST_DIR, 'fakes', 'fake-dsh.mjs');
+const { agy: FAKE_AGY, codex: FAKE_CODEX, claude: FAKE_CLAUDE, dsh: FAKE_DSH } = FAKE_FILES;
 
 test('active target registry exposes full 4-harness quartet', () => {
   assert.deepEqual(listActiveTargetIds(), ['agy', 'codex', 'claude', 'dsh']);

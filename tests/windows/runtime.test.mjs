@@ -14,7 +14,7 @@ import {
   runCospan,
   spawnTracked,
   WIN_ONLY,
-} from './windows-helpers.mjs';
+} from '../helpers/windows.mjs';
 
 test(
   'win32 CreateProcessW ceiling: agy handles 40 KiB prompt via --prompt-file without ENAMETOOLONG',

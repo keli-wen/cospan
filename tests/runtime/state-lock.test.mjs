@@ -4,12 +4,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { requestSafeJobCancellation } from '../src/commands/lifecycle.mjs';
-import { cliCommandPrefix } from '../src/installer-templates.mjs';
-import { loadState, updateState, workspaceStateDir } from '../src/job-store.mjs';
-import { readTextRetry, replaceFile, withStateLock } from '../src/state-lock.mjs';
-import { buildSpawnCommand } from '../src/targets.mjs';
-import { rmTree, writeNpmCmdShim } from './windows-helpers.mjs';
+import { requestSafeJobCancellation } from '../../src/commands/lifecycle.mjs';
+import { cliCommandPrefix } from '../../src/installer-templates.mjs';
+import { loadState, updateState, workspaceStateDir } from '../../src/job-store.mjs';
+import { readTextRetry, replaceFile, withStateLock } from '../../src/state-lock.mjs';
+import { buildSpawnCommand } from '../../src/targets.mjs';
+import { rmTree, writeNpmCmdShim } from '../helpers/windows.mjs';
 
 test('buildSpawnCommand unwraps npm .cmd shims on all platforms and quotes native .cmd', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cospan-shim-unit-'));

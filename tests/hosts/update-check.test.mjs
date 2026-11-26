@@ -5,7 +5,6 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 import {
   checkForUpdate,
   compareSemver,
@@ -13,13 +12,10 @@ import {
   detectStaleConfigOverrides,
   PACKAGE_VERSION,
   readUpdateCache,
-} from '../src/update-check.mjs';
+} from '../../src/update-check.mjs';
+import { COSPAN_BIN, FAKE_FILES, MCP_SERVER, ROOT_DIR } from '../helpers/paths.mjs';
 
-const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
-const ROOT_DIR = path.resolve(TEST_DIR, '..');
-const COSPAN_BIN = path.join(ROOT_DIR, 'bin', 'cospan.mjs');
-const MCP_SERVER = path.join(ROOT_DIR, 'src', 'mcp', 'cospan-mcp.mjs');
-const FAKE_AGY = path.join(TEST_DIR, 'fakes', 'fake-agy.mjs');
+const FAKE_AGY = FAKE_FILES.agy;
 
 function makeTempEnv() {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'cospan-upd-'));

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isAgyEffortFamily, resolveAgyModel } from '../src/drivers/agy.mjs';
-import { BUILTIN_CONFIG } from '../src/targets.mjs';
+import { isAgyEffortFamily, resolveAgyModel } from '../../src/drivers/agy.mjs';
+import { BUILTIN_CONFIG } from '../../src/targets.mjs';
 
 test('isAgyEffortFamily matches known and future versioned Gemini/Claude families only', () => {
   for (const name of [

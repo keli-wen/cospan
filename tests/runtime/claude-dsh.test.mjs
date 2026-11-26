@@ -4,15 +4,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { COSPAN_BIN as BIN, FAKE_FILES } from '../helpers/paths.mjs';
 
-const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
-const ROOT_DIR = path.resolve(TEST_DIR, '..');
-const BIN = path.join(ROOT_DIR, 'bin', 'cospan.mjs');
-const FAKE_AGY = path.join(TEST_DIR, 'fakes', 'fake-agy.mjs');
-const FAKE_CODEX = path.join(TEST_DIR, 'fakes', 'fake-codex.mjs');
-const FAKE_CLAUDE = path.join(TEST_DIR, 'fakes', 'fake-claude.mjs');
-const FAKE_DSH = path.join(TEST_DIR, 'fakes', 'fake-dsh.mjs');
+const { agy: FAKE_AGY, codex: FAKE_CODEX, claude: FAKE_CLAUDE, dsh: FAKE_DSH } = FAKE_FILES;
 
 function makeTempGitRepo() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cospan-p2-'));

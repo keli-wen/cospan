@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { installForCodexHost } from '../src/installer.mjs';
+import { installForCodexHost } from '../../src/installer.mjs';
 import {
   buildChildEnv,
   createCmdShimFixture,
@@ -17,7 +17,7 @@ import {
   TARGET_BIN_ENV_VARS,
   WIN_ONLY,
   writeNpmCmdShim,
-} from './windows-helpers.mjs';
+} from '../helpers/windows.mjs';
 
 test(
   'win32 .cmd shims: doctor --check discovers all 4 targets, versions, and contracts',

@@ -23,7 +23,7 @@ npm run format:check
 npm test
 ```
 
-All tests in `npm test` run **100% offline with zero token burn** using deterministic fake CLI harnesses in [`tests/fakes/`](tests/fakes/). You do not need live subscriptions or API keys to develop and test most changes.
+All tests in `npm test` run **100% offline with zero token burn** using deterministic fake CLI harnesses in [`tests/fakes/`](tests/fakes/). See [`tests/README.md`](tests/README.md) for domain layout, shared test helpers, verification tiers, and known blind spots.
 
 ---
 
@@ -48,16 +48,13 @@ Run the **Base Gate** on every PR, plus every row that matches the files you mod
 | **Base Gate (every change)**                                                                                                                                                        | `npm run lint`, `npm run format:check`, and `npm test` must all pass with 0 failures.                                                                                                                                  |
 | **Drivers, model mappings, or binary discovery**<br>(`src/drivers/*`, `src/targets.mjs`, `src/config.mjs`, `src/contract-check.mjs`)                                                | Base Gate + unit tests in `tests/drivers/` (`npm test -- drivers`) + run `node bin/cospan.mjs doctor --check` (zero-token `--help` flag contract verification against locally installed CLIs).                         |
 | **Installer, skills, or stdio MCP**<br>(`src/installer*.mjs`, `src/mcp/*`, `skills/*`, `.mcp.json`)                                                                                 | Base Gate + run `node bin/cospan.mjs install` (regenerates deterministic bundles) + re-run `npm run format:check` and `tests/hosts/mcp-install.test.mjs`.                                                              |
-| **Sidebar UI or DSH client bundle**<br>(`src/ui/*`, `src/sidebar-state.mjs`, `src/sidecar/*`, `dsh/*`)                                                                              | Base Gate + `npm run sync:ui` (or `node bin/cospan.mjs install`) so `dsh/client.js` stays in sync with `src/ui/` + `tests/hosts/sidebar-ui.test.mjs`. Note visual verification in PR when modifying CSS/layout.        |
+| **Sidebar UI or DSH client bundle**<br>(`src/ui/*`, `src/sidebar-state.mjs`, `src/sidecar/*`, `dsh/*`)                                                                              | Base Gate + `npm run sync:ui` (or `node bin/cospan.mjs install`) so `dsh/client.js` stays in sync with `src/ui/` + `tests/hosts/` (`npm test -- hosts`). Note visual verification in PR when modifying CSS/layout.     |
 | **Process tree, state locking, workers, or Windows shims**<br>(`src/process-tree.mjs`, `src/state-lock.mjs`, `src/job-worker.mjs`, `src/commands/lifecycle.mjs`, `src/targets.mjs`) | Base Gate + verify `tests/runtime/state-lock.test.mjs` & `tests/windows/` invariants. Explicitly flag in the PR body that the manually gated `test-windows` CI job (`windows-latest`) should be approved before merge. |
 | **CLI flags, subcommands, or help text**<br>(`src/cli*.mjs`, `src/commands/*`)                                                                                                      | Base Gate + update `printHelp()` in `src/cli-args.mjs`, expose/update `src/mcp/tools.mjs` if applicable, and cover with tests in `tests/runtime/` (`npm test -- runtime`).                                             |
 
 ### Offline Fake vs. Live CLI Testing Policy
 
-- **Never burn paid tokens in `npm test`:** Always write deterministic tests against `tests/fakes/fake-{agy,codex,claude,dsh}.mjs` by overriding `AGY_BIN`, `CODEX_BIN`, `CLAUDE_BIN`, `DSH_BIN` and pointing `COSPAN_HOME` / `COSPAN_CONFIG_DIR` to a temp directory.
-- **Verify real upstream CLI flags before changing drivers:** Never guess or invent upstream CLI flags from memory. Inspect the real binary's `--help` output first (for example, `codex exec resume` rejects `-C` and `-s`), update [`src/contract-check.mjs`](src/contract-check.mjs), and mirror real flag asymmetries in `tests/fakes/`.
-- **Avoid temp-dir teardown flakes:** Always `wait` or `cancel` any background jobs spawned during a test before calling `fs.rmSync()` on temp directories so Windows file handles are released cleanly.
-- **Live smoke tests are opt-in:** Only run `cospan doctor --ping` or live delegation smoke checks when validating real upstream CLI behavior; report live smoke output separately in the PR description.
+Never burn paid tokens in `npm test`. See [`tests/README.md`](tests/README.md) for the canonical rules on test placement, reusable helpers/fakes (`tests/helpers/`, `tests/fakes/`), Windows temp-dir teardown safety, upstream `--help` mirroring, and opt-in live smoke reporting.
 
 ---
 

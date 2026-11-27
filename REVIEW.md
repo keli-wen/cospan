@@ -48,8 +48,8 @@ Expand only the lenses the diff actually touches. Cite the test, observation, or
 Classify findings clearly:
 
 - **`Blocker`** — Correctness bug, silent failure, security/isolation breach, broken public contract, or missing evidence for a high-risk path. Must cite `file:line`, trigger condition, visible consequence, and concrete fix or missing check. **Proportionality Gate**: A finding is only a `Blocker` if it is triggerable on realistic human/agent usage paths or crosses a real trust boundary; theoretical timing races or `SIGKILL` injection must be logged as `Note / Follow-up` (documenting the known boundary), never used to block merge.
-- **`Should Fix`** — Real edge-case gap, missing test for changed logic, or doc/bundle drift (`dsh/client.js`, `skills/*`, help/MCP schema).
-- **`Note / Follow-up`** — Non-blocking polish or pre-existing debt outside this PR's scope.
+- **`Should Fix`** — Real edge-case gap, missing or hollow test for changed logic, wrong-tier test harness, or doc/bundle drift (`dsh/client.js`, `skills/*`, help/MCP schema).
+- **`Note / Follow-up`** — Non-blocking polish, minor test-fixture duplication/style pedantry, or pre-existing debt outside this PR's scope.
 
 Convergence rules:
 

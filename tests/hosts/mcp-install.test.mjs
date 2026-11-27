@@ -93,6 +93,69 @@ function assertAgyDrawReference(agyPluginDir) {
   assert.match(agyDraw, /Explicit opt-in only/);
 }
 
+const MCP_CWD_SCHEMA_RE = /^(?:\.\/|\$\{PLUGIN_ROOT\}(?:\/|$)|\$\{PLUGIN_DATA\}(?:\/|$))/;
+
+async function assertMarketplaceMcpLaunch(marketPluginRoot, marketServer, cfgDir) {
+  const launchCwd = path.resolve(marketPluginRoot, marketServer.cwd);
+  if (process.platform !== 'win32') {
+    const launcherPath = path.join(marketPluginRoot, 'mcp', 'run-mcp.sh');
+    assert.ok(fs.existsSync(launcherPath), 'marketplace run-mcp.sh must exist');
+    assert.notEqual(fs.statSync(launcherPath).mode & 0o111, 0, 'run-mcp.sh must be executable');
+  }
+
+  const child = spawn(marketServer.command, marketServer.args || [], {
+    cwd: launchCwd,
+    env: {
+      ...process.env,
+      COSPAN_HOME: cfgDir,
+      COSPAN_CONFIG_DIR: cfgDir,
+    },
+    stdio: ['pipe', 'pipe', 'pipe'],
+    windowsHide: true,
+  });
+
+  const childClosed = new Promise((resolve) => child.once('close', resolve));
+  try {
+    const init = await new Promise((resolve, reject) => {
+      let buf = '';
+      const timer = setTimeout(() => reject(new Error('marketplace MCP initialize timeout')), 5000);
+      child.once('error', (err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+      child.stdout.on('data', (chunk) => {
+        buf += chunk.toString('utf8');
+        const lines = buf.split('\n');
+        buf = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          clearTimeout(timer);
+          resolve(JSON.parse(line));
+          return;
+        }
+      });
+      child.stdin.write(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2024-11-05',
+            capabilities: {},
+            clientInfo: { name: 'codex-mcp-client', version: '1.0.0' },
+          },
+        }) + '\n'
+      );
+    });
+    assert.equal(init.result.serverInfo.name, 'cospan');
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGTERM');
+    }
+    await Promise.race([childClosed, new Promise((r) => setTimeout(r, 3000))]);
+  }
+}
+
 test('host installer mounts all detected targets and adheres to host schemas', async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cospan-install-'));
   try {
@@ -175,17 +238,27 @@ test('host installer mounts all detected targets and adheres to host schemas', a
     const mcpJson = JSON.parse(fs.readFileSync(path.join(codexPkgRoot, '.mcp.json'), 'utf8'));
     assert.equal(mcpJson.$schema, 'https://agent-plugins.org/schemas/1.0.0/mcp.schema.json');
     assert.equal(mcpJson.mcpServers.cospan.command, 'node');
-    assert.deepEqual(mcpJson.mcpServers.cospan.args, ['${PLUGIN_ROOT}/src/mcp/cospan-mcp.mjs']);
+    assert.equal(mcpJson.mcpServers.cospan.cwd, './');
+    assert.match(mcpJson.mcpServers.cospan.cwd, MCP_CWD_SCHEMA_RE);
+    assert.deepEqual(mcpJson.mcpServers.cospan.args, ['src/mcp/cospan-mcp.mjs']);
 
+    const marketPluginRoot = path.join(marketRoot, 'plugins', 'cospan');
     const marketMcpJson = JSON.parse(
-      fs.readFileSync(path.join(marketRoot, 'plugins', 'cospan', '.mcp.json'), 'utf8')
+      fs.readFileSync(path.join(marketPluginRoot, '.mcp.json'), 'utf8')
     );
-    assert.ok(
-      marketMcpJson.mcpServers.cospan.command === 'node' ||
-        marketMcpJson.mcpServers.cospan.command.startsWith('./')
-    );
-    assert.ok(fs.existsSync(path.join(marketRoot, 'plugins', 'cospan', 'mcp', 'cospan-mcp.mjs')));
-    assert.ok(fs.existsSync(path.join(marketRoot, 'plugins', 'cospan', 'mcp', 'tools.mjs')));
+    const marketServer = marketMcpJson.mcpServers.cospan;
+    assert.equal(marketServer.cwd, './');
+    assert.match(marketServer.cwd, MCP_CWD_SCHEMA_RE);
+    if (process.platform === 'win32') {
+      assert.equal(marketServer.command, 'node');
+      assert.deepEqual(marketServer.args, ['mcp/cospan-mcp.mjs']);
+    } else {
+      assert.equal(marketServer.command, './mcp/run-mcp.sh');
+      assert.equal(marketServer.args, undefined);
+    }
+    assert.ok(fs.existsSync(path.join(marketPluginRoot, 'mcp', 'cospan-mcp.mjs')));
+    assert.ok(fs.existsSync(path.join(marketPluginRoot, 'mcp', 'tools.mjs')));
+    await assertMarketplaceMcpLaunch(marketPluginRoot, marketServer, path.join(tmp, 'mcp-cfg'));
     assert.equal(durationToMs('5m'), 300000);
     assert.equal(JOB_EXIT_CODES.done, 0);
     assert.equal(typeof parseCliArgs, 'function');

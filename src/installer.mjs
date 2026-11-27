@@ -136,7 +136,7 @@ function writeCodexBundleAtRoot({
   force,
   cospanBin,
   mcpCommand = 'node',
-  mcpArgs = ['${PLUGIN_ROOT}/src/mcp/cospan-mcp.mjs'],
+  mcpArgs = ['src/mcp/cospan-mcp.mjs'],
 }) {
   const skillsRoot = path.join(bundleRoot, 'skills');
   fs.rmSync(skillsRoot, { recursive: true, force: true });
@@ -202,6 +202,7 @@ function writeCodexBundleAtRoot({
       cospan: {
         type: 'stdio',
         command: mcpCommand,
+        cwd: './',
         ...(mcpArgs.length ? { args: mcpArgs } : {}),
       },
     },
@@ -306,8 +307,6 @@ export function installForCodexHost({
     discovered,
     force,
     cospanBin: '<skill-dir>/../../bin/cospan.mjs',
-    mcpCommand: 'node',
-    mcpArgs: ['${PLUGIN_ROOT}/src/mcp/cospan-mcp.mjs'],
   });
 
   const marketPluginRoot = path.join(marketplaceRoot, 'plugins', 'cospan');
@@ -320,7 +319,7 @@ export function installForCodexHost({
     force,
     cospanBin,
     mcpCommand: useLauncher ? './mcp/run-mcp.sh' : 'node',
-    mcpArgs: useLauncher ? [] : ['${PLUGIN_ROOT}/mcp/cospan-mcp.mjs'],
+    mcpArgs: useLauncher ? [] : ['mcp/cospan-mcp.mjs'],
   });
   copyMarketplaceMcpFiles({ packageRoot, marketPluginRoot, cospanBin, useLauncher });
 

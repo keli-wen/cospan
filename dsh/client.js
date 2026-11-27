@@ -1301,7 +1301,8 @@ body[data-ds-dark-theme] .cospan-board,
           emptySessionTitle: '当前会话暂无委派任务',
           emptySessionSub: '同工作区其他会话仍有委派记录。',
           emptyWorkspaceTitle: '当前工作区暂无委派任务',
-          emptyWorkspaceSub: '通过 cospan 向 agy / codex / claude / dsh 派发的任务会实时显示在这里。',
+          emptyWorkspaceSub:
+            '通过 cospan 向 agy / codex / claude / dsh / grok 派发的任务会实时显示在这里。',
           waitingSessionTitle: '等待打开会话',
           showWorkspaceBtn: (n) => `查看工作区全部 (${n})`,
           queryLabel: '提问',
@@ -1336,7 +1337,8 @@ body[data-ds-dark-theme] .cospan-board,
           emptySessionTitle: 'No tasks in this session',
           emptySessionSub: 'Tasks delegated from other sessions exist in this workspace.',
           emptyWorkspaceTitle: 'No delegated tasks yet',
-          emptyWorkspaceSub: 'Tasks dispatched via cospan to agy, codex, claude, and dsh appear here.',
+          emptyWorkspaceSub:
+            'Tasks dispatched via cospan to agy, codex, claude, dsh, and grok appear here.',
           waitingSessionTitle: 'Waiting for active session',
           showWorkspaceBtn: (n) => `Show workspace (${n})`,
           queryLabel: 'Query',
@@ -1510,6 +1512,22 @@ body[data-ds-dark-theme] .cospan-board,
           '<rect x="14" y="10" width="1" height="1"/><rect x="2" y="11" width="7" height="1"/>' +
           '<rect x="3" y="12" width="7" height="1"/><rect x="3" y="13" width="8" height="1"/>' +
           '<rect x="4" y="14" width="3" height="1"/><rect x="9" y="14" width="3" height="1"/></g></svg>',
+        grok:
+          '<svg width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true">' +
+          '<g fill="#94A3B8"><rect x="5" y="2" width="6" height="1"/><rect x="3" y="3" width="2" height="1"/>' +
+          '<rect x="11" y="3" width="2" height="1"/><rect x="2" y="4" width="1" height="8"/>' +
+          '<rect x="13" y="4" width="1" height="8"/><rect x="3" y="12" width="2" height="1"/>' +
+          '<rect x="11" y="12" width="2" height="1"/><rect x="5" y="13" width="6" height="1"/></g>' +
+          '<g fill="#CBD5E1"><rect x="5" y="3" width="6" height="1"/><rect x="4" y="4" width="2" height="1"/>' +
+          '<rect x="10" y="4" width="2" height="1"/><rect x="3" y="5" width="1" height="6"/>' +
+          '<rect x="12" y="5" width="1" height="6"/><rect x="4" y="11" width="2" height="1"/>' +
+          '<rect x="10" y="11" width="2" height="1"/><rect x="5" y="12" width="6" height="1"/></g>' +
+          '<g fill="#F8FAFC"><rect x="12" y="2" width="2" height="1"/><rect x="11" y="3" width="2" height="1"/>' +
+          '<rect x="10" y="4" width="2" height="1"/><rect x="9" y="5" width="2" height="1"/>' +
+          '<rect x="8" y="6" width="2" height="1"/><rect x="7" y="7" width="2" height="1"/>' +
+          '<rect x="6" y="8" width="2" height="1"/><rect x="5" y="9" width="2" height="1"/>' +
+          '<rect x="4" y="10" width="2" height="1"/><rect x="3" y="11" width="2" height="1"/>' +
+          '<rect x="2" y="12" width="2" height="1"/></g></svg>',
       };
 
       const QUERY_GLYPH_SVG = pixelRowsSvg(
@@ -1722,7 +1740,8 @@ body[data-ds-dark-theme] .cospan-board,
           .replace(/^gemini-/, '')
           .replace(/^deepseek-/, '')
           .replace(/^claude-/, '')
-          .replace(/^gpt-/, '');
+          .replace(/^gpt-/, '')
+          .replace(/^grok-/, '');
         if (effort && !compact.endsWith(`-${effort}`)) return `${compact} · ${effort}`;
         return compact;
       }
@@ -2455,6 +2474,7 @@ body[data-ds-dark-theme] .cospan-board,
               { id: 'codex', cmd: '/cospan-codex' },
               { id: 'claude', cmd: '/cospan-claude' },
               { id: 'dsh', cmd: '/cospan-dsh' },
+              { id: 'grok', cmd: '/cospan-grok' },
             ];
             for (const cap of caps) {
               const copyKey = `cap:${cap.id}`;
@@ -2838,7 +2858,7 @@ body[data-ds-dark-theme] .cospan-board,
             type: 'button',
             className: 'cospan-dsh-header-btn cospan-mono',
             onClick,
-            title: 'Cospan · Cross-harness task delegation (agy, codex, claude, dsh)',
+            title: 'Cospan · Cross-harness task delegation (agy, codex, claude, dsh, grok)',
           },
           h(CospanEmblem, { size: 15 }),
           h('span', null, 'cospan')
@@ -3023,7 +3043,7 @@ body[data-ds-dark-theme] .cospan-board,
                 id: 'cospan',
                 order: 26,
                 title: () => 'cospan',
-                description: () => 'Cross-harness delegation · agy, codex, claude & dsh',
+                description: () => 'Cross-harness delegation · agy, codex, claude, dsh & grok',
                 icon: CospanEmblem,
               },
             ],

@@ -13,4 +13,5 @@ export const FAKE_FILES = {
   codex: path.join(TESTS_DIR, 'fakes', 'fake-codex.mjs'),
   claude: path.join(TESTS_DIR, 'fakes', 'fake-claude.mjs'),
   dsh: path.join(TESTS_DIR, 'fakes', 'fake-dsh.mjs'),
+  grok: path.join(TESTS_DIR, 'fakes', 'fake-grok.mjs'),
 };

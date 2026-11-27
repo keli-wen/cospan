@@ -9,7 +9,7 @@
 </p>
 
 **Unified orchestration across coding agents.**
-Connect **Antigravity**, **Codex**, **Claude Code**, **DeepSeek Harness**, and more through one async delegation protocol.
+Connect **Antigravity**, **Codex**, **Claude Code**, **DeepSeek Harness**, **Grok Build**, and more through one async delegation protocol.
 
 [![Cospan orchestration adapter connecting Antigravity, Codex, Claude Code, and DeepSeek Harness](assets/design.png)](assets/design.svg)
 
@@ -42,7 +42,7 @@ Invoke `/cospan-<harness>` (or `/cospan:<harness>` in Claude Code, `$cospan:<har
 
 ### Unified live sidebar (`agy` & `dsh`)
 
-Installing on **Antigravity (`agy`)** or **DeepSeek Harness (`dsh`)** adds the unified Cospan sidebar panel—tracking live background runs across all four harnesses, inspecting Q&A outputs, and aggregating sibling Git worktrees (`wt:*`) in one view ([Install ↓](#install)):
+Installing on **Antigravity (`agy`)** or **DeepSeek Harness (`dsh`)** adds the unified Cospan sidebar panel—tracking live background runs across all five harnesses, inspecting Q&A outputs, and aggregating sibling Git worktrees (`wt:*`) in one view ([Install ↓](#install)):
 
 <p align="center">
   <img src="assets/sidebar-extension.png" width="420" alt="Unified Cospan sidebar panel inside Antigravity (agy) and DeepSeek Harness (dsh) tracking Codex, Claude Code, Antigravity worktree, and DeepSeek Harness tasks">
@@ -82,7 +82,7 @@ Installing on **Antigravity (`agy`)** or **DeepSeek Harness (`dsh`)** adds the u
 
 ## Install
 
-Requires **Node.js `>= 20`** plus whichever coding agent CLIs you want to connect (`agy`, `claude`, `codex`, `dsh`).
+Requires **Node.js `>= 20`** plus whichever coding agent CLIs you want to connect (`agy`, `claude`, `codex`, `dsh`, `grok`).
 
 > [!TIP]
 > <img src="assets/icons/cospan-pixel.svg" width="16" height="16" alt=""> **Recommended — For agents:** Paste this into any coding agent to let it detect your environment, install Cospan, and verify CLI contracts automatically:
@@ -146,6 +146,7 @@ Claude Code and Codex cache plugins by version and require a restart after upgra
 | **Codex** (`codex`)          | OpenAI · GPT                | `sol`, `terra`, `astra`, `luna`                                  |
 | **Claude Code** (`claude`)   | Anthropic · Claude          | `sonnet`, `opus`, `haiku`, `fable`                               |
 | **DeepSeek Harness** (`dsh`) | DeepSeek & custom providers | `v4.1-flash` / `flash`, `v4-pro` / `pro`, `<provider>/<model>`   |
+| **Grok Build** (`grok`)      | xAI · Grok                  | `build`, `fast`                                                  |
 
 _More harnesses are on the way—Cospan's driver layer is designed to plug in additional coding agent CLIs cleanly._
 

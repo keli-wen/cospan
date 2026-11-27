@@ -12,8 +12,8 @@ import { FAKE_FILES } from '../helpers/paths.mjs';
 
 const { agy: FAKE_AGY, codex: FAKE_CODEX, claude: FAKE_CLAUDE, dsh: FAKE_DSH } = FAKE_FILES;
 
-test('active target registry exposes full 4-harness quartet', () => {
-  assert.deepEqual(listActiveTargetIds(), ['agy', 'codex', 'claude', 'dsh']);
+test('active target registry exposes full 5-harness quintet', () => {
+  assert.deepEqual(listActiveTargetIds(), ['agy', 'codex', 'claude', 'dsh', 'grok']);
 });
 
 test('claude model/effort resolution and 4-quadrant permission/readonly flags', () => {

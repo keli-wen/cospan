@@ -6,7 +6,13 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { COSPAN_BIN as BIN, FAKE_FILES } from '../helpers/paths.mjs';
 
-const { agy: FAKE_AGY, codex: FAKE_CODEX, claude: FAKE_CLAUDE, dsh: FAKE_DSH } = FAKE_FILES;
+const {
+  agy: FAKE_AGY,
+  codex: FAKE_CODEX,
+  claude: FAKE_CLAUDE,
+  dsh: FAKE_DSH,
+  grok: FAKE_GROK,
+} = FAKE_FILES;
 
 function makeTempGitRepo() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cospan-p2-'));
@@ -31,6 +37,7 @@ function runCospan(args, { cwd, env = {}, input } = {}) {
       CODEX_BIN: FAKE_CODEX,
       CLAUDE_BIN: FAKE_CLAUDE,
       DSH_BIN: FAKE_DSH,
+      GROK_BIN: FAKE_GROK,
       COSPAN_CONFIG_DIR: cfgDir,
       ...env,
     },
@@ -186,7 +193,7 @@ test('unauthenticated claude/dsh errors surface and doctor --check verifies all 
     assert.equal(docOk.code, 0, docOk.stderr);
     const parsedDoc = JSON.parse(docOk.stdout);
     assert.equal(parsedDoc.contracts_ok, true);
-    for (const id of ['agy', 'codex', 'claude', 'dsh']) {
+    for (const id of ['agy', 'codex', 'claude', 'dsh', 'grok']) {
       assert.equal(parsedDoc.targets[id].driverReady, true);
       assert.equal(parsedDoc.contracts[id].ok, true);
     }

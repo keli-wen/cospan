@@ -80,19 +80,18 @@ export function boundSnapshot(snapshot) {
 }
 
 const VERIFICATION_CMD_RE =
-  /\b(test|tests|lint|build|typecheck|type-check|check|verify|validate|pytest|jest|vitest|cargo test|npm test|pnpm test|yarn test|go test|tsc|eslint|ruff)\b/i;
+  /\b(tests?|lint|build|type-?check|check|verify|validate|pytest|jest|vitest|tsc|eslint|ruff)\b/i;
 
 function inferPhaseFromTool(toolName, inputPreview) {
   const t = String(toolName || '').toLowerCase();
   if (
-    /file_change|write_file|edit_file|patch|apply_patch|^write$|^edit$|multiedit|notebookedit/.test(
-      t
-    )
+    /file_change|write_file|edit_file|patch|multiedit|notebookedit/.test(t) ||
+    /search_replace|hashline_edit|strreplace|^(write|edit|delete)$/.test(t)
   ) {
     return 'editing';
   }
   if (
-    /command|run_command|bash|shell/.test(t) &&
+    /command|run_terminal_cmd|bash|shell/.test(t) &&
     VERIFICATION_CMD_RE.test(String(inputPreview || ''))
   ) {
     return 'verifying';

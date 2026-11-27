@@ -35,7 +35,7 @@ These rules are enforced by ESLint ([`eslint.config.mjs`](eslint.config.mjs)) an
 2. **Thin Entrypoints & Modularity Gates:** Keep `src/cli.mjs` and `src/mcp/cospan-mcp.mjs` to dispatch/re-exports only. Every `.mjs` file must stay `<= 350` effective lines, functions `<= 80` lines (`<= 120` in tests), max nesting `<= 4`, cyclomatic complexity `<= 15`, line width `<= 100`, with zero circular imports (`import-x/no-cycle`).
 3. **Contract Stability:** Preserve existing CLI flags, job exit codes (`0` done / `2` running / `3` error / `4` canceled / `5` attention), `<= 8 KiB` bounded `observe` JSON, out-of-tree `~/.cospan/trajectories/` state storage, public exports (`durationToMs`, `repoRoot`, `workspaceStateDir`, `parseCliArgs`, `JOB_EXIT_CODES`, `main`), and stdio MCP behavior.
 4. **Cross-Platform Process Safety:** Every `spawn` / `spawnSync` call in `src/**/*.mjs` must pass `windowsHide: true` (asserted in [`tests/windows/process.test.mjs`](tests/windows/process.test.mjs)). Route external binary launches through `buildSpawnCommand()` in `src/targets.mjs` so `.cmd` / `.bat` shims unwrap safely on Windows, and keep parsers CRLF-safe.
-5. **Verbatim Model Shortcut Contract:** Host skill templates (`agy`, `codex`, `claude`, `dsh`) must list shortcuts verbatim and never hardcode ephemeral full model version strings that go stale—let `src/config.mjs` and driver resolvers map shortcuts deterministically at runtime.
+5. **Verbatim Model Shortcut Contract:** Host skill templates (`agy`, `codex`, `claude`, `dsh`, `grok`) must list shortcuts verbatim and never hardcode ephemeral full model version strings that go stale—let `src/config.mjs` and driver resolvers map shortcuts deterministically at runtime.
 
 ---
 
@@ -54,7 +54,7 @@ Run the **Base Gate** on every PR, plus every row that matches the files you mod
 
 ### Offline Fake vs. Live CLI Testing Policy
 
-- **Never burn paid tokens in `npm test`:** Always write deterministic tests against `tests/fakes/fake-{agy,codex,claude,dsh}.mjs` by overriding `AGY_BIN`, `CODEX_BIN`, `CLAUDE_BIN`, `DSH_BIN` and pointing `COSPAN_HOME` / `COSPAN_CONFIG_DIR` to a temp directory.
+- **Never burn paid tokens in `npm test`:** Always write deterministic tests against `tests/fakes/fake-{agy,codex,claude,dsh,grok}.mjs` by overriding `AGY_BIN`, `CODEX_BIN`, `CLAUDE_BIN`, `DSH_BIN`, `GROK_BIN` and pointing `COSPAN_HOME` / `COSPAN_CONFIG_DIR` to a temp directory.
 - **Verify real upstream CLI flags before changing drivers:** Never guess or invent upstream CLI flags from memory. Inspect the real binary's `--help` output first (for example, `codex exec resume` rejects `-C` and `-s`), update [`src/contract-check.mjs`](src/contract-check.mjs), and mirror real flag asymmetries in `tests/fakes/`.
 - **Avoid temp-dir teardown flakes:** Always `wait` or `cancel` any background jobs spawned during a test before calling `fs.rmSync()` on temp directories so Windows file handles are released cleanly.
 - **Live smoke tests are opt-in:** Only run `cospan doctor --ping` or live delegation smoke checks when validating real upstream CLI behavior; report live smoke output separately in the PR description.

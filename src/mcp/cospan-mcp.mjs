@@ -83,8 +83,8 @@ const RPC_METHODS = {
       serverInfo: { name: 'cospan', version: COSPAN_VERSION },
       instructions:
         'Use cospan_send + cospan_wait (always passing your workspace `cwd`) to delegate tasks ' +
-        'to external headless harnesses (`agy`, `codex`, `claude`, `dsh`) and collect results ' +
-        'cleanly without polling.',
+        'to external headless harnesses (`agy`, `codex`, `claude`, `dsh`, `grok`) and collect ' +
+        'results cleanly without polling.',
     };
   },
   ping() {

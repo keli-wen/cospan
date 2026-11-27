@@ -1,7 +1,7 @@
 {
   "name": "cospan",
   "version": "0.1.3",
-  "description": "Unified orchestration across coding agents — connect Antigravity, Codex, Claude Code, and DeepSeek Harness through one async delegation protocol.",
+  "description": "Unified orchestration across coding agents — connect Antigravity, Codex, Claude Code, DeepSeek Harness, and Grok Build through one async delegation protocol.",
   "type": "module",
   "bin": {
     "cospan": "./bin/cospan.mjs"
@@ -26,6 +26,8 @@
     "codex",
     "antigravity",
     "deepseek-harness",
+    "grok",
+    "grok-build",
     "multi-agent",
     "coding-agent",
     "orchestration",

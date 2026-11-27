@@ -1,7 +1,7 @@
 {
   "name": "cospan",
   "version": "0.1.3",
-  "description": "Unified orchestration across coding agents — connect Antigravity, OpenAI Codex, Claude Code, and DeepSeek Harness through one async delegation protocol.",
+  "description": "Unified orchestration across coding agents — connect Antigravity, OpenAI Codex, Claude Code, DeepSeek Harness, and Grok Build through one async delegation protocol.",
   "icon": "assets/icon-512.png",
   "author": {
     "name": "Keli Wen",
@@ -23,6 +23,8 @@
     "codex",
     "claude-code",
     "deepseek-harness",
+    "grok",
+    "grok-build",
     "delegation"
   ],
   "mcpServers": {

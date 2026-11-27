@@ -9,7 +9,7 @@
 </p>
 
 **跨 Coding Agent 的统一后台协作。**
-用一套异步派活协议把 **Antigravity**、**Codex**、**Claude Code** 和 **DeepSeek Harness** 串起来，让 AI 之间自己互相调用（更多工具陆续接入中）。
+用一套异步派活协议把 **Antigravity**、**Codex**、**Claude Code**、**DeepSeek Harness** 和 **Grok Build** 串起来，让 AI 之间自己互相调用（更多工具陆续接入中）。
 
 [![Cospan 连接 Antigravity、Codex、Claude Code 与 DeepSeek Harness](assets/design.png)](assets/design.svg)
 
@@ -42,10 +42,10 @@ https://github.com/user-attachments/assets/43384bfd-ca36-4d6b-9074-84ca5257cc20
 
 ### 统一任务侧边栏（`agy` 和 `dsh`）
 
-装在 **Antigravity (`agy`)** 或 **DeepSeek Harness (`dsh`)** 里时，还会多出一个统一的 Cospan 侧边栏——四家的后台任务走到哪一步、你问了什么、对方答了什么都能点开看，同一个仓库下不同 Git worktree（`wt:*`）的任务也会自动归到一起（[安装方式 ↓](#安装)）：
+装在 **Antigravity (`agy`)** 或 **DeepSeek Harness (`dsh`)** 里时，还会多出一个统一的 Cospan 侧边栏——五家的后台任务走到哪一步、你问了什么、对方答了什么都能点开看，同一个仓库下不同 Git worktree（`wt:*`）的任务也会自动归到一起（[安装方式 ↓](#安装)）：
 
 <p align="center">
-  <img src="assets/sidebar-extension.png" width="420" alt="Antigravity (agy) 与 DeepSeek Harness (dsh) 中的 Cospan 统一侧边栏面板截图，展示 Codex、Claude Code、Antigravity worktree 与 DeepSeek Harness 四家并行任务">
+  <img src="assets/sidebar-extension.png" width="420" alt="Antigravity (agy) 与 DeepSeek Harness (dsh) 中的 Cospan 统一侧边栏面板截图，展示 Codex、Claude Code、Antigravity worktree 与 DeepSeek Harness 并行任务">
 </p>
 
 ### 跨工具配合的几个常见场景
@@ -82,7 +82,7 @@ https://github.com/user-attachments/assets/43384bfd-ca36-4d6b-9074-84ca5257cc20
 
 ## 安装
 
-需要 **Node.js `>= 20`** 以及你想调用的命令行工具（`agy`、`claude`、`codex`、`dsh` 装了哪几个就能连哪几个）。
+需要 **Node.js `>= 20`** 以及你想调用的命令行工具（`agy`、`claude`、`codex`、`dsh`、`grok` 装了哪几个就能连哪几个）。
 
 > [!TIP]
 > <img src="assets/icons/cospan-pixel.svg" width="16" height="16" alt=""> **推荐方式 — 直接让 AI 帮你安装：** 把下面这段话发给你正在用的任意 Coding Agent，它会自动识别你的系统与客户端完成安装并做体检：
@@ -133,7 +133,7 @@ _（也可以直接在 DeepSeek Harness 桌面端侧边栏 **Plugins** 里填 `g
 - **OpenAI Codex (`codex`)**：`codex plugin marketplace upgrade && codex plugin add cospan@cospan`
 - **DeepSeek Harness (`dsh`)**：`dsh plugin --profile desktop add 'github:keli-wen/cospan#<tag-or-commit>'`
 
-Claude Code 和 Codex 会按版本号缓存插件，更新完要重启客户端才能生效。随时可以跑 `node <cospan路径>/bin/cospan.mjs doctor --check`（不消耗任何模型额度）检查四家 CLI 路径和参数是否正常；Windows 写法和缓存强制刷新细节见 [docs/INSTALL_FOR_AGENTS.md](docs/INSTALL_FOR_AGENTS.md)。
+Claude Code 和 Codex 会按版本号缓存插件，更新完要重启客户端才能生效。随时可以跑 `node <cospan路径>/bin/cospan.mjs doctor --check`（不消耗任何模型额度）检查五家 CLI（`agy`、`codex`、`claude`、`dsh`、`grok`）路径和参数是否正常；Windows 写法和缓存强制刷新细节见 [docs/INSTALL_FOR_AGENTS.md](docs/INSTALL_FOR_AGENTS.md)。
 
 </details>
 
@@ -145,6 +145,7 @@ Claude Code 和 Codex 会按版本号缓存插件，更新完要重启客户端�
 | **Codex** (`codex`)          | OpenAI · GPT             | `sol`, `terra`, `astra`, `luna`                                  |
 | **Claude Code** (`claude`)   | Anthropic · Claude       | `sonnet`, `opus`, `haiku`, `fable`                               |
 | **DeepSeek Harness** (`dsh`) | DeepSeek 及自定义提供商  | `v4.1-flash` / `flash`, `v4-pro` / `pro`, `<provider>/<model>`   |
+| **Grok Build** (`grok`)      | xAI · Grok               | `build`, `fast`                                                  |
 
 _后续还会陆续接入更多工具——Cospan 的驱动层设计得比较轻量，接入新的编程 Agent CLI 很方便。_
 

@@ -8,7 +8,7 @@ You are a coding agent asked to install, upgrade, or verify **Cospan**. Follow t
 ## 0. Prerequisites
 
 1. **Node.js `>= 20` and `git`** — verify `node --version` and `git --version`. Cospan uses pure ESM with zero runtime dependencies.
-2. **Target harness CLIs (`agy`, `claude`, `codex`, `dsh`)** — check which CLIs are installed and authenticated on this machine (`command -v agy claude codex dsh` on macOS/Linux, or `Get-Command agy, claude, codex, dsh` in PowerShell). Cospan only needs the host you run in plus whichever peer harnesses the user wants to delegate to.
+2. **Target harness CLIs (`agy`, `claude`, `codex`, `dsh`, `grok`)** — check which CLIs are installed and authenticated on this machine (`command -v agy claude codex dsh grok` on macOS/Linux, or `Get-Command agy, claude, codex, dsh, grok` in PowerShell). Cospan only needs the host you run in plus whichever peer harnesses the user wants to delegate to.
    - **Never install or authenticate missing target CLIs yourself.** If a target CLI the user wants is missing or unauthenticated, tell them how to install/sign in to that CLI and let them handle it.
 
 ## 1. Detect Which Host Harness You Are Running In
@@ -38,7 +38,7 @@ Follow the section matching the host harness you are currently running inside (o
   node "$HOME\.cospan\repo\bin\cospan.mjs" install --host agy
   ```
 
-`install --host agy` detects installed peer CLIs (`agy`, `codex`, `claude`, `dsh`), writes `~/.gemini/config/plugins/cospan/` (skills `cospan-<target>` + `cospan-jobs` + sidecar `cospan_board`), and initializes `~/.cospan/config.json` and `~/.cospan/targets.json`. Pass `--force` if the user wants skills mounted even for targets not yet installed.
+`install --host agy` detects installed peer CLIs (`agy`, `codex`, `claude`, `dsh`, `grok`), writes `~/.gemini/config/plugins/cospan/` (skills `cospan-<target>` + `cospan-jobs` + sidecar `cospan_board`), and initializes `~/.cospan/config.json` and `~/.cospan/targets.json`. Pass `--force` if the user wants skills mounted even for targets not yet installed.
 
 **Upgrade** an existing `~/.cospan/repo` install:
 
@@ -139,7 +139,7 @@ Once enabled, the Cordis bundle (`dsh/index.mjs` + `dsh/client.js`) registers `/
    ```
 
    This probes installed peer binaries and verifies `--help` CLI flag contracts without spending any model tokens.
-   - If a peer CLI shows `NOT FOUND` even though it is installed in a non-standard path, tell the user they can set `AGY_BIN` / `CODEX_BIN` / `CLAUDE_BIN` / `DSH_BIN` or pin binaries via `cospan install`.
+   - If a peer CLI shows `NOT FOUND` even though it is installed in a non-standard path, tell the user they can set `AGY_BIN` / `CODEX_BIN` / `CLAUDE_BIN` / `DSH_BIN` / `GROK_BIN` or pin binaries via `cospan install`.
 
 2. **Optional live smoke test (ask the user before spending model quota):**
    After restarting the host harness (or invoking `cospan` directly), ask the user if they want to run a quick zero-tool check on a target of their choice:
@@ -157,6 +157,6 @@ Once enabled, the Cordis bundle (`dsh/index.mjs` + `dsh/client.js`) registers `/
 Summarize cleanly in the user's language:
 
 1. Whether install/upgrade succeeded (and from GitHub or a local checkout).
-2. The `doctor --check` inventory (which of `agy`, `codex`, `claude`, `dsh` are `READY` vs `NOT FOUND`).
+2. The `doctor --check` inventory (which of `agy`, `codex`, `claude`, `dsh`, `grok` are `READY` vs `NOT FOUND`).
 3. Whether the user needs to **restart/reload** their host client before using `/cospan-*` / `/cospan:*` / `$cospan:*`.
 4. Offer the optional live smoke test if not already run.

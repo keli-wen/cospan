@@ -27,7 +27,7 @@ function maybeEmitUpdateNotice(config) {
 }
 
 export function cmdSend(opts) {
-  if (!opts.to) die('`send` requires `--to <agy|codex|claude|dsh>`');
+  if (!opts.to) die('`send` requires `--to <agy|codex|claude|dsh|grok>`');
   validatePermissionsFlags(opts);
   const prompt = readTaskPrompt(opts);
   const timeout = validateSendTimeout(opts.timeout);
@@ -104,7 +104,7 @@ function executeForegroundAsk(driver, binary, inv, workspace, timeout, timeoutMs
 }
 
 export function cmdAsk(opts) {
-  if (!opts.to) die('`ask` requires `--to <agy|codex|claude|dsh>`');
+  if (!opts.to) die('`ask` requires `--to <agy|codex|claude|dsh|grok>`');
   validatePermissionsFlags(opts);
   const driver = getDriver(opts.to);
   const binary = resolveTargetBinary(driver.id);

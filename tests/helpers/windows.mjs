@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { COSPAN_BIN, FAKE_FILES, MCP_SERVER, ROOT_DIR } from './paths.mjs';
 
 export { COSPAN_BIN, FAKE_FILES, MCP_SERVER, ROOT_DIR };
-export const TARGET_BIN_ENV_VARS = ['AGY_BIN', 'CODEX_BIN', 'CLAUDE_BIN', 'DSH_BIN'];
+export const TARGET_BIN_ENV_VARS = ['AGY_BIN', 'CODEX_BIN', 'CLAUDE_BIN', 'DSH_BIN', 'GROK_BIN'];
 export const WIN_ONLY = { skip: process.platform !== 'win32', timeout: 60000 };
 
 export function rmTree(dir) {

@@ -3,7 +3,7 @@
   "name": "cospan",
   "displayName": "Cospan",
   "version": "0.1.3",
-  "description": "Unified orchestration across coding agents — connect Antigravity (agy), OpenAI Codex, Claude Code, and DeepSeek Harness (dsh) through one async delegation protocol.",
+  "description": "Unified orchestration across coding agents — connect Antigravity (agy), OpenAI Codex, Claude Code, DeepSeek Harness (dsh), and Grok Build (grok) through one async delegation protocol.",
   "logo": "assets/icon.svg",
   "author": "Keli Wen",
   "repository": "https://github.com/keli-wen/cospan",

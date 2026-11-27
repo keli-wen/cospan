@@ -158,7 +158,7 @@ window.__ModuleLoader__.load({
             type: 'button',
             className: 'cospan-dsh-header-btn cospan-mono',
             onClick,
-            title: 'Cospan · Cross-harness task delegation (agy, codex, claude, dsh)',
+            title: 'Cospan · Cross-harness task delegation (agy, codex, claude, dsh, grok)',
           },
           h(CospanEmblem, { size: 15 }),
           h('span', null, 'cospan')
@@ -343,7 +343,7 @@ window.__ModuleLoader__.load({
                 id: 'cospan',
                 order: 26,
                 title: () => 'cospan',
-                description: () => 'Cross-harness delegation · agy, codex, claude & dsh',
+                description: () => 'Cross-harness delegation · agy, codex, claude, dsh & grok',
                 icon: CospanEmblem,
               },
             ],

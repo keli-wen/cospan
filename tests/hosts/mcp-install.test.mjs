@@ -18,7 +18,13 @@ import { listWorkspaceBoard } from '../../src/sidebar-state.mjs';
 import { apply as applyDshPlugin } from '../../dsh/index.mjs';
 import { FAKE_FILES, MCP_SERVER } from '../helpers/paths.mjs';
 
-const { agy: FAKE_AGY, codex: FAKE_CODEX, claude: FAKE_CLAUDE, dsh: FAKE_DSH } = FAKE_FILES;
+const {
+  agy: FAKE_AGY,
+  codex: FAKE_CODEX,
+  claude: FAKE_CLAUDE,
+  dsh: FAKE_DSH,
+  grok: FAKE_GROK,
+} = FAKE_FILES;
 
 function assertVerbatimSkillContract(skillText, targetId) {
   const frontmatterMatch = /^---\n([\s\S]*?)\n---\n/.exec(skillText);
@@ -40,57 +46,70 @@ function assertVerbatimSkillContract(skillText, targetId) {
   assert.match(skillText, /append effort suffixes/i);
   assert.doesNotMatch(
     skillText,
-    /gpt-6\.2-|gpt-6\.1-|gpt-6-|gpt-5\.3-codex-spark|gemini-3\.8-|gemini-4-|claude-opus-5-5|claude-sonnet-5-5|Opus 5\.5|Sonnet 5\.5|deepseek-flash|deepseek-v4-pro|deepseek-chat|deepseek-reasoner/
+    /gpt-6\.2-|gpt-6\.1-|gpt-6-|gpt-5\.3-codex-spark|gemini-3\.8-|gemini-4-|claude-opus-5-5|claude-sonnet-5-5|Opus 5\.5|Sonnet 5\.5|deepseek-flash|deepseek-v4-pro|deepseek-chat|deepseek-reasoner|grok-4\./
   );
+}
+
+function assertReferenceExclusive(skillsRoot, prefix, relPath, ownerId, patterns, rejectRe) {
+  for (const id of ['agy', 'codex', 'claude', 'dsh', 'grok']) {
+    const refPath = path.join(skillsRoot, `${prefix}${id}`, 'references', relPath);
+    assert.equal(fs.existsSync(refPath), id === ownerId);
+  }
+  const ref = fs.readFileSync(
+    path.join(skillsRoot, `${prefix}${ownerId}`, 'references', relPath),
+    'utf8'
+  );
+  for (const re of patterns) assert.match(ref, re);
+  if (rejectRe) assert.doesNotMatch(ref, rejectRe);
 }
 
 function assertRenderedCodexSkills(codexPkgRoot) {
-  for (const id of ['agy', 'codex', 'claude', 'dsh']) {
-    const skillPath = path.join(codexPkgRoot, 'skills', id, 'SKILL.md');
-    assert.ok(fs.existsSync(skillPath));
-    const text = fs.readFileSync(skillPath, 'utf8');
-    assertVerbatimSkillContract(text, id);
-    const drawPath = path.join(codexPkgRoot, 'skills', id, 'references', 'draw.md');
-    assert.equal(fs.existsSync(drawPath), id === 'codex');
+  const skillsRoot = path.join(codexPkgRoot, 'skills');
+  for (const id of ['agy', 'codex', 'claude', 'dsh', 'grok']) {
+    assertVerbatimSkillContract(fs.readFileSync(path.join(skillsRoot, id, 'SKILL.md'), 'utf8'), id);
   }
+  const agySkill = fs.readFileSync(path.join(skillsRoot, 'agy', 'SKILL.md'), 'utf8');
+  assert.match(agySkill, /<skill-dir>\/\.\.\/\.\.\/bin\/cospan\.mjs/);
+  assert.match(agySkill, /Batch vs\. separate `cospan_wait`/);
   assert.match(
-    fs.readFileSync(path.join(codexPkgRoot, 'skills', 'agy', 'SKILL.md'), 'utf8'),
-    /<skill-dir>\/\.\.\/\.\.\/bin\/cospan\.mjs/
+    fs.readFileSync(path.join(skillsRoot, 'grok', 'SKILL.md'), 'utf8'),
+    /references\/live-search\.md/
   );
-  assert.match(
-    fs.readFileSync(path.join(codexPkgRoot, 'skills', 'agy', 'SKILL.md'), 'utf8'),
-    /Batch vs\. separate `cospan_wait`/
-  );
-  const mcpDraw = fs.readFileSync(
-    path.join(codexPkgRoot, 'skills', 'codex', 'references', 'draw.md'),
-    'utf8'
-  );
-  assert.match(mcpDraw, /\$imagegen/);
-  assert.match(mcpDraw, /cospan_send/);
-  assert.match(mcpDraw, /cospan_continue/);
-  assert.match(mcpDraw, /Explicit opt-in only/);
+  assertReferenceExclusive(skillsRoot, '', 'draw.md', 'codex', [
+    /\$imagegen/,
+    /cospan_send/,
+    /cospan_continue/,
+    /Explicit opt-in only/,
+  ]);
+  const liveSearchRe = [/web_search/, /x_keyword_search/, /cospan_send/, /cospan_continue/];
+  assertReferenceExclusive(skillsRoot, '', 'live-search.md', 'grok', liveSearchRe, /grok-4\./);
 }
 
-function assertAgyDrawReference(agyPluginDir) {
-  for (const id of ['agy', 'codex', 'claude', 'dsh']) {
-    const drawPath = path.join(agyPluginDir, 'skills', `cospan-${id}`, 'references', 'draw.md');
-    assert.equal(fs.existsSync(drawPath), id === 'codex');
-  }
-  const agyCodexSkill = fs.readFileSync(
-    path.join(agyPluginDir, 'skills', 'cospan-codex', 'SKILL.md'),
-    'utf8'
-  );
+function assertAgyReferences(agyPluginDir) {
+  const skillsRoot = path.join(agyPluginDir, 'skills');
+  const agyCodexSkill = fs.readFileSync(path.join(skillsRoot, 'cospan-codex', 'SKILL.md'), 'utf8');
   assert.match(agyCodexSkill, /references\/draw\.md/);
   assert.match(agyCodexSkill, /only when explicitly requested via Codex/i);
   assert.match(agyCodexSkill, /Batch vs\. separate `wait`/);
-  const agyDraw = fs.readFileSync(
-    path.join(agyPluginDir, 'skills', 'cospan-codex', 'references', 'draw.md'),
-    'utf8'
+  assert.match(
+    fs.readFileSync(path.join(skillsRoot, 'cospan-grok', 'SKILL.md'), 'utf8'),
+    /references\/live-search\.md/
   );
-  assert.match(agyDraw, /\$imagegen/);
-  assert.match(agyDraw, /--effort low/);
-  assert.match(agyDraw, /continue --id/);
-  assert.match(agyDraw, /Explicit opt-in only/);
+  assertReferenceExclusive(skillsRoot, 'cospan-', 'draw.md', 'codex', [
+    /\$imagegen/,
+    /--effort low/,
+    /continue --id/,
+    /Explicit opt-in only/,
+  ]);
+  const liveSearchRe = [/web_search/, /x_keyword_search/, /--readonly/, /continue --id/];
+  assertReferenceExclusive(
+    skillsRoot,
+    'cospan-',
+    'live-search.md',
+    'grok',
+    liveSearchRe,
+    /grok-4\./
+  );
 }
 
 test('host installer mounts all detected targets and adheres to host schemas', async () => {
@@ -109,29 +128,18 @@ test('host installer mounts all detected targets and adheres to host schemas', a
       codex: mkTarget('codex', FAKE_CODEX, '0.167.2-fake'),
       claude: mkTarget('claude', FAKE_CLAUDE, '2.1.322-fake'),
       dsh: mkTarget('dsh', FAKE_DSH, '0.2.2-rc.1-fake'),
+      grok: mkTarget('grok', FAKE_GROK, '1.0.93-fake'),
     };
 
     const agyPluginsRoot = path.join(tmp, 'agy-plugins');
     const agyRes = installForAgyHost({ discovered, pluginsRoot: agyPluginsRoot });
-    assert.deepEqual(agyRes.skills, [
-      'cospan-agy',
-      'cospan-codex',
-      'cospan-claude',
-      'cospan-dsh',
-      'cospan-jobs',
-    ]);
-    assert.ok(fs.existsSync(path.join(agyRes.pluginDir, 'skills', 'cospan-agy', 'SKILL.md')));
-    assert.ok(fs.existsSync(path.join(agyRes.pluginDir, 'skills', 'cospan-codex', 'SKILL.md')));
-    assert.ok(fs.existsSync(path.join(agyRes.pluginDir, 'skills', 'cospan-claude', 'SKILL.md')));
-    assert.ok(fs.existsSync(path.join(agyRes.pluginDir, 'skills', 'cospan-dsh', 'SKILL.md')));
-    for (const id of ['agy', 'codex', 'claude', 'dsh']) {
-      const agySkill = fs.readFileSync(
-        path.join(agyRes.pluginDir, 'skills', `cospan-${id}`, 'SKILL.md'),
-        'utf8'
-      );
-      assertVerbatimSkillContract(agySkill, id);
+    const targets = ['agy', 'codex', 'claude', 'dsh', 'grok'];
+    assert.deepEqual(agyRes.skills, [...targets.map((t) => `cospan-${t}`), 'cospan-jobs']);
+    for (const id of targets) {
+      const p = path.join(agyRes.pluginDir, 'skills', `cospan-${id}`, 'SKILL.md');
+      assertVerbatimSkillContract(fs.readFileSync(p, 'utf8'), id);
     }
-    assertAgyDrawReference(agyRes.pluginDir);
+    assertAgyReferences(agyRes.pluginDir);
 
     const agyManifest = JSON.parse(
       fs.readFileSync(path.join(agyRes.pluginDir, 'plugin.json'), 'utf8')
@@ -163,13 +171,7 @@ test('host installer mounts all detected targets and adheres to host schemas', a
       packageRoot: codexPkgRoot,
       marketplaceRoot: marketRoot,
     });
-    assert.deepEqual(codexRes.skills, [
-      '$cospan:agy',
-      '$cospan:codex',
-      '$cospan:claude',
-      '$cospan:dsh',
-      'cospan:jobs',
-    ]);
+    assert.deepEqual(codexRes.skills, [...targets.map((t) => `$cospan:${t}`), 'cospan:jobs']);
     assertRenderedCodexSkills(codexPkgRoot);
 
     const mcpJson = JSON.parse(fs.readFileSync(path.join(codexPkgRoot, '.mcp.json'), 'utf8'));
@@ -218,6 +220,15 @@ test('dsh Cordis bundle registers cospan-* skills and native cospan_* tools', as
   assert.ok(registeredSkillProvider);
   const dshSkills = await registeredSkillProvider.list();
   assert.ok(dshSkills.some((s) => s.name === 'cospan-agy' && s.invocation.userInvocable === true));
+  const grokCandidate = dshSkills.find(
+    (s) => s.name === 'cospan-grok' && s.invocation.userInvocable === true
+  );
+  assert.ok(grokCandidate);
+  assert.ok(
+    fs.existsSync(path.join(grokCandidate.resourceBase.path, 'references', 'live-search.md'))
+  );
+  const grokHydrated = await registeredSkillProvider.get(grokCandidate);
+  assert.ok(grokHydrated.content.includes('/references/live-search.md'));
   assert.ok(
     dshSkills.some((s) => s.name === 'cospan-jobs' && s.invocation.userInvocable === false)
   );

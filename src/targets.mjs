@@ -87,6 +87,19 @@ const CANDIDATE_SPECS = {
       '/opt/homebrew/bin/dsh',
     ],
   },
+  grok: {
+    envVar: 'GROK_BIN',
+    binName: 'grok',
+    phase: 1,
+    winProgramSubpath: ['Grok', 'bin', 'grok'],
+    winFallbacks: (home) => [path.join(home, '.grok', 'bin', 'grok')],
+    posixFallbacks: (home) => [
+      path.join(home, '.grok', 'bin', 'grok'),
+      path.join(home, '.local', 'bin', 'grok'),
+      '/opt/homebrew/bin/grok',
+      '/usr/local/bin/grok',
+    ],
+  },
 };
 
 function isExecutableFile(filePath) {
@@ -128,6 +141,7 @@ function fallbackCandidates(spec, platform = process.platform) {
   const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
   const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
   return [
+    ...(spec.winFallbacks ? spec.winFallbacks(home) : []),
     path.join(appData, 'npm', spec.binName),
     path.join(home, '.local', 'bin', spec.binName),
     path.join(localAppData, 'Programs', ...spec.winProgramSubpath),

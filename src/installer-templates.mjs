@@ -1,6 +1,11 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TARGET_MODEL_SHORTCUTS } from './config.mjs';
+import {
+  renderAgyTargetExtraSection,
+  renderCodexTargetExtraSection,
+  TARGET_DOCS,
+} from './installer-target-docs.mjs';
 
 const SELF_DIR = path.dirname(fileURLToPath(import.meta.url));
 export const PACKAGE_ROOT = path.resolve(SELF_DIR, '..');
@@ -15,50 +20,7 @@ export function cliCommandPrefix(cospanBin = COSPAN_BIN_PATH) {
   return `node ${shellQuote(cospanBin)}`;
 }
 
-export const MOUNTABLE_TARGET_IDS = ['agy', 'codex', 'claude', 'dsh'];
-
-const TARGET_DOCS = {
-  codex: {
-    title: 'OpenAI Codex (`codex`)',
-    defaultNote:
-      '`~/.cospan/config.json` and `<workspace>/.cospan/config.json` defaults; ' +
-      'pass `inherit` to defer to Codex CLI settings',
-    effortsNote: 'supported `--effort`: `low`, `medium`, `high`, `xhigh`',
-    strengths:
-      'Delegate code review, second-opinion debugging, repository research, ' +
-      'scoped implementation tasks, or (only when explicitly requested via Codex) ' +
-      'raster image generation/editing to OpenAI Codex CLI.',
-  },
-  agy: {
-    title: 'Google Antigravity (`agy`)',
-    defaultNote: '`~/.cospan/config.json` and `<workspace>/.cospan/config.json` defaults',
-    effortsNote:
-      'supported `--effort`: `low`, `medium`, `high`, `xhigh` (`xhigh` on `neon`, `hydrogen`)',
-    strengths:
-      'Delegate repository-wide research, multimodal/large-context analysis, code review, ' +
-      'or implementation tasks to Google Antigravity CLI.',
-  },
-  claude: {
-    title: 'Anthropic Claude Code (`claude`)',
-    defaultNote:
-      '`~/.cospan/config.json` and `<workspace>/.cospan/config.json` defaults; ' +
-      'pass `inherit` to use Claude Code settings default',
-    effortsNote: 'supported `--effort`: `low`, `medium`, `high`, `xhigh`, `max`',
-    strengths:
-      'Delegate code review, architectural analysis, repository debugging, ' +
-      'or scoped implementation tasks to Anthropic Claude Code CLI.',
-  },
-  dsh: {
-    title: 'DeepSeek Harness (`dsh`)',
-    defaultNote:
-      'defaults to `inherit` so `dsh --profile headless` uses your configured ' +
-      'DeepSeek Harness provider/model without overriding `~/.dsh`',
-    effortsNote: 'supported `--effort`: `off`, `low`, `high`, `max`',
-    strengths:
-      'Delegate repository research, verification, second-opinion debugging, ' +
-      'or implementation tasks to DeepSeek Harness CLI.',
-  },
-};
+export const MOUNTABLE_TARGET_IDS = ['agy', 'codex', 'claude', 'dsh', 'grok'];
 
 function formatTargetModelShortcuts(targetId) {
   return (TARGET_MODEL_SHORTCUTS[targetId] || []).map((s) => `\`${s}\``).join(', ');
@@ -144,17 +106,7 @@ export function renderAgyHostTargetSkill({ targetId, cospanBin }) {
   const desc =
     `Point-to-point headless delegation to ${doc.title} via cospan. ` +
     `${doc.strengths} Model shortcuts include ${formatTargetModelShortcuts(targetId)}.${selfNote}`;
-  const drawSection =
-    targetId === 'codex'
-      ? `\n## 4. Raster Image Generation & Editing (Explicit Opt-In)\n\n` +
-        `- **Only when the user explicitly asks to generate or edit an image via Codex / ` +
-        `\`cospan-codex\`** (never hijack generic image requests meant for the host's default ` +
-        `image tools): read \`references/draw.md\` (in this skill's directory) before ` +
-        `dispatching.\n` +
-        `- Covers built-in \`$imagegen\` (\`image_gen\` on ChatGPT subscription, no ` +
-        `\`OPENAI_API_KEY\`), \`--effort low\` writable dispatch, transparent alpha output, ` +
-        `and multi-turn visual edits via \`continue\`.\n`
-      : '';
+  const extraSection = renderAgyTargetExtraSection(targetId);
   return (
     `---\nname: cospan-${targetId}\ndescription: ${desc}\n---\n\n` +
     `# cospan-${targetId} — Delegate to ${doc.title}\n\n` +
@@ -185,7 +137,7 @@ export function renderAgyHostTargetSkill({ targetId, cospanBin }) {
     `the delegation failure first.\n` +
     `  - When \`--readonly\` was used for a review, present the findings to the user before ` +
     `auto-applying controversial edits if they only asked for a review.\n` +
-    drawSection
+    extraSection
   );
 }
 
@@ -224,7 +176,7 @@ export function renderAgySidecarManifest({ sidecarServerPath = SIDECAR_SERVER_PA
     display_name: 'Cospan',
     description:
       'Live workspace delegation board for Cospan tasks across Antigravity, Codex, ' +
-      'Claude Code, and DeepSeek Harness.',
+      'Claude Code, DeepSeek Harness, and Grok Build.',
     has_web_ui: true,
     agent_permissions: {
       allows_user_interactions: false,
@@ -304,15 +256,7 @@ export function renderCodexHostTargetSkill({ targetId, cospanBin }) {
   const desc =
     `Point-to-point headless delegation to ${doc.title} via cospan ($cospan:${targetId}). ` +
     `${doc.strengths} Model shortcuts include ${formatTargetModelShortcuts(targetId)}.${selfNote}`;
-  const drawSection =
-    targetId === 'codex'
-      ? `\n## 3. Raster Image Generation & Editing (Non-Codex Hosts, Explicit Opt-In)\n\n` +
-        `- **Only when running in a non-Codex host (such as Claude Code or DeepSeek Harness) ` +
-        `and the user explicitly asks to generate or edit an image via Codex**: read ` +
-        `\`<skill-dir>/references/draw.md\` (\`references/draw.md\` in this skill's directory) ` +
-        `before dispatching. Inside Codex itself, use \`$imagegen\` directly instead of ` +
-        `delegating.\n`
-      : '';
+  const extraSection = renderCodexTargetExtraSection(targetId);
   return (
     `---\nname: ${targetId}\ndescription: ${desc}\n---\n\n` +
     `# $cospan:${targetId} — Delegate to ${doc.title}\n\n` +
@@ -333,7 +277,7 @@ export function renderCodexHostTargetSkill({ targetId, cospanBin }) {
     `Run unsandboxed in your workspace directory:\n` +
     `\`\`\`bash\n${cmd} send --to ${targetId} [--readonly] --prompt "<task>"\n` +
     `${cmd} wait <job-id...> --timeout 10m\n\`\`\`\n` +
-    drawSection
+    extraSection
   );
 }
 

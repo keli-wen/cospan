@@ -8,6 +8,7 @@ export const TARGET_MODEL_SHORTCUTS = {
   codex: ['sol', 'terra', 'astra', 'luna'],
   claude: ['sonnet', 'opus', 'haiku', 'fable'],
   dsh: ['flash', 'pro', 'v4.1-flash', 'v4-pro'],
+  grok: ['build', 'fast'],
 };
 
 export const BUILTIN_CONFIG = {
@@ -37,6 +38,12 @@ export const BUILTIN_CONFIG = {
       askModel: 'inherit',
       askEffort: 'inherit',
       provider: 'deepseek-official',
+    },
+    grok: {
+      model: 'inherit',
+      effort: 'high',
+      askModel: 'inherit',
+      askEffort: 'low',
     },
   },
   mappings: {
@@ -79,6 +86,10 @@ export const BUILTIN_CONFIG = {
       'deepseek-v4.1-flash': 'deepseek-flash',
       pro: 'deepseek-v4-pro',
       'v4-pro': 'deepseek-v4-pro',
+    },
+    grok: {
+      build: 'grok-4.7',
+      fast: 'grok-4.7-build-fast',
     },
   },
 };

@@ -82,6 +82,24 @@ export const CLI_CONTRACT_SPECS = {
       ],
     },
   ],
+  grok: [
+    {
+      args: ['--help'],
+      requiredFlags: [
+        '--single',
+        '--output-format',
+        '--cwd',
+        '--resume',
+        '--model',
+        '--reasoning-effort',
+        '--permission-mode',
+        '--always-approve',
+        '--disallowed-tools',
+        '--deny',
+        '--sandbox',
+      ],
+    },
+  ],
 };
 
 function runHelpProbe(binary, probeArgs) {

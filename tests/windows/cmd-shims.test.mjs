@@ -20,7 +20,7 @@ import {
 } from '../helpers/windows.mjs';
 
 test(
-  'win32 .cmd shims: doctor --check discovers all 4 targets, versions, and contracts',
+  'win32 .cmd shims: doctor --check discovers all 5 targets, versions, and contracts',
   WIN_ONLY,
   () => {
     const fx = createCmdShimFixture('cospan-win-doc-');
@@ -32,7 +32,7 @@ test(
       assert.equal(docRes.code, 0, `doctor stderr=${docRes.stderr}\nstdout=${docRes.stdout}`);
       const parsed = JSON.parse(docRes.stdout);
       assert.equal(parsed.contracts_ok, true, JSON.stringify(parsed.contracts, null, 2));
-      for (const id of ['agy', 'codex', 'claude', 'dsh']) {
+      for (const id of ['agy', 'codex', 'claude', 'dsh', 'grok']) {
         assert.equal(parsed.targets[id].installed, true, `${id} should be discovered`);
         assert.match(parsed.targets[id].binary, /\.cmd$/i, `${id} should resolve to .cmd shim`);
         assert.ok(parsed.targets[id].version, `${id} version probe should succeed via .cmd shim`);

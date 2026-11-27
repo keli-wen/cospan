@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { spawn } from 'node:child_process';
 
-const TARGET_ENUM = ['agy', 'codex', 'claude', 'dsh'];
+const TARGET_ENUM = ['agy', 'codex', 'claude', 'dsh', 'grok'];
 const EFFORT_ENUM = ['low', 'medium', 'high', 'xhigh', 'max'];
 const CWD_PROP = {
   type: 'string',
@@ -9,9 +9,9 @@ const CWD_PROP = {
 };
 const MODEL_PARAM_DESC =
   'Optional model shortcut (pass verbatim, e.g. sol/terra/astra/luna, ' +
-  'flash/neon/carbon/argon/hydrogen/opus/sonnet, haiku/fable, pro/v4.1-flash/v4-pro), ' +
-  'explicit full model ID, or <provider>/<model>. Omit when unspecified to use cospan ' +
-  'effective defaults; never guess version numbers or append effort suffixes.';
+  'flash/neon/carbon/argon/hydrogen/opus/sonnet, haiku/fable, pro/v4.1-flash/v4-pro, ' +
+  'build/fast), explicit full model ID, or <provider>/<model>. Omit when unspecified to use ' +
+  'cospan effective defaults; never guess version numbers or append effort suffixes.';
 const EFFORT_PARAM_DESC =
   'Optional reasoning effort override. Pass separately instead of appending ' +
   'effort suffixes (such as -medium) to model.';
@@ -21,7 +21,7 @@ export const TOOLS = [
     name: 'cospan_send',
     description:
       'Launch an asynchronous background delegation job to an external headless harness ' +
-      '(`agy`, `codex`, `claude`, or `dsh`). Returns immediately with `job_id`; ' +
+      '(`agy`, `codex`, `claude`, `dsh`, or `grok`). Returns immediately with `job_id`; ' +
       'call `cospan_wait` next to collect its output.',
     inputSchema: {
       type: 'object',
@@ -105,8 +105,8 @@ export const TOOLS = [
     name: 'cospan_continue',
     description:
       'Continue a previous job in its native target conversation/thread (`--conversation` in ' +
-      'agy, `exec resume` in codex, `--resume` in claude, `--session-id` in dsh). Pass either ' +
-      '`id` or `last: true`. Returns a new linked `job_id`; collect it with `cospan_wait`.',
+      'agy, `exec resume` in codex, `--resume` in claude/grok, `--session-id` in dsh). Pass ' +
+      'either `id` or `last: true`. Returns a new linked `job_id`; collect it with `cospan_wait`.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -174,7 +174,7 @@ export const TOOLS = [
     name: 'cospan_ask',
     description:
       'Run a fast, synchronous, read-only foreground Q&A check against ' +
-      '`agy`, `codex`, `claude`, or `dsh`.',
+      '`agy`, `codex`, `claude`, `dsh`, or `grok`.',
     inputSchema: {
       type: 'object',
       properties: {

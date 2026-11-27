@@ -10,6 +10,7 @@ import {
   savePinnedTargets,
 } from './targets.mjs';
 import { renderCodexDrawReference } from './codex-draw-reference.mjs';
+import { renderGrokSearchReference } from './grok-search-reference.mjs';
 import {
   COSPAN_BIN_PATH,
   MOUNTABLE_TARGET_IDS,
@@ -28,6 +29,20 @@ export { COSPAN_BIN_PATH, PACKAGE_ROOT } from './installer-templates.mjs';
 function writeCleanDirFile(filePath, content) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, content);
+}
+
+function writeTargetReferences(skillDir, targetId, hostMode, cospanBin) {
+  if (targetId === 'codex') {
+    writeCleanDirFile(
+      path.join(skillDir, 'references', 'draw.md'),
+      renderCodexDrawReference({ hostMode, cospanBin })
+    );
+  } else if (targetId === 'grok') {
+    writeCleanDirFile(
+      path.join(skillDir, 'references', 'live-search.md'),
+      renderGrokSearchReference({ hostMode, cospanBin })
+    );
+  }
 }
 
 /**
@@ -54,12 +69,7 @@ export function installForAgyHost({
         path.join(skillDir, 'SKILL.md'),
         renderAgyHostTargetSkill({ targetId, cospanBin })
       );
-      if (targetId === 'codex') {
-        writeCleanDirFile(
-          path.join(skillDir, 'references', 'draw.md'),
-          renderCodexDrawReference({ hostMode: 'agy', cospanBin })
-        );
-      }
+      writeTargetReferences(skillDir, targetId, 'agy', cospanBin);
     }
   }
 
@@ -86,7 +96,7 @@ export function installForAgyHost({
     version: PACKAGE_VERSION,
     description:
       'Persona-free point-to-point headless delegation primitive across ' +
-      'Antigravity (agy), OpenAI Codex, Claude Code, and DeepSeek Harness (dsh).',
+      'Antigravity (agy), OpenAI Codex, Claude Code, DeepSeek Harness (dsh), and Grok Build.',
     ...(hasIconSvg ? { logo: 'assets/icon.svg' } : {}),
     author: 'Keli Wen',
     repository: 'https://github.com/keli-wen/cospan',
@@ -151,12 +161,7 @@ function writeCodexBundleAtRoot({
         path.join(skillDir, 'SKILL.md'),
         renderCodexHostTargetSkill({ targetId, cospanBin })
       );
-      if (targetId === 'codex') {
-        writeCleanDirFile(
-          path.join(skillDir, 'references', 'draw.md'),
-          renderCodexDrawReference({ hostMode: 'mcp', cospanBin })
-        );
-      }
+      writeTargetReferences(skillDir, targetId, 'mcp', cospanBin);
     }
   }
   writeCleanDirFile(path.join(skillsRoot, 'jobs', 'SKILL.md'), renderCodexHostJobsSkill());
@@ -168,10 +173,11 @@ function writeCodexBundleAtRoot({
     version: PACKAGE_VERSION,
     description:
       'Persona-free point-to-point headless delegation primitive for Codex ' +
-      '($cospan:agy, $cospan:codex, $cospan:claude, $cospan:dsh + cospan MCP).',
+      '($cospan:agy, $cospan:codex, $cospan:claude, $cospan:dsh, $cospan:grok + cospan MCP).',
     keywords: (
       'cospan orchestration multi-agent coding-agent subagents code-review mcp ' +
-      'agent-skills agy antigravity codex claude-code deepseek-harness dsh multi-harness delegation'
+      'agent-skills agy antigravity codex claude-code deepseek-harness dsh grok ' +
+      'multi-harness delegation'
     ).split(' '),
     skills: './skills/',
     mcpServers: './.mcp.json',
@@ -179,7 +185,7 @@ function writeCodexBundleAtRoot({
       displayName: 'Cospan',
       shortDescription:
         'Delegate tasks point-to-point to headless harnesses across ' +
-        'Antigravity, Codex, Claude Code, and DeepSeek Harness.',
+        'Antigravity, Codex, Claude Code, DeepSeek Harness, and Grok Build.',
       developerName: 'Keli Wen',
       category: 'Developer Tools',
       capabilities: ['Skills', 'MCP'],

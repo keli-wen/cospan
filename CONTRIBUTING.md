@@ -81,7 +81,7 @@ Use the matching template in [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/
    - Start with a plain-language **TL;DR** and a small **Before → After** CUJ example so a reviewer understands the user-visible impact in 10 seconds.
    - **Never narrate the diff** (no file-by-file summaries or internal function lists)—agents and reviewers inspect the git diff for implementation details; keep the PR body strictly to incremental value (intent, examples, non-obvious trade-offs/boundaries, linked issues, and verification).
    - Link related issues (`Fixes #N` / `Closes #N` / `Relates to #N`) and paste **actual observed verification results** (commands run, test pass/skip counts, and any manual/real-OS checks).
-6. **Apply GitHub labels (`--label`) on every PR and issue:** pick one **Type** label (`bug`, `feature`, `docs`, `chore`, or `tracking`) plus every affected **Area** label (`core`, `drivers`, `hosts`)—for example, `bug,core` for a CLI runtime fix, `chore,docs` for template/doc updates, or `chore` + all affected areas for a release PR.
+6. **Apply GitHub labels (`--label`) on every PR and issue:** pick one **Type** label (`bug`, `feature`, `docs`, `chore`, or `tracking`) plus every affected **Area** label (`core`, `drivers`, `hosts`, `ADLC`)—for example, `bug,core` for a CLI runtime fix, `chore,docs,ADLC` for agent-automation or ADLC governance updates, or `chore` + all affected areas for a release PR.
 7. Never commit local trajectory artifacts (`~/.cospan/`), `.env` files, or unrelated scratch directories.
 
 ---
@@ -100,7 +100,7 @@ Follow this deterministic checklist when cutting a `vX.Y.Z` release (see [`docs/
    - Create `docs/releases/vX.Y.Z.md` (header image + `cospan-codex` attribution, `## Highlights`, `### What's New`, `## Validation`, and agent-first `## Upgrade` pinned to `vX.Y.Z`) and prepend the release to `docs/releases/README.md`.
 4. **Verify & open the Release PR:**
    - Run `node bin/cospan.mjs install` (plus `npm run sync:ui` if UI assets changed), `npm run lint`, `npm run format:check`, `npm test`, and `node bin/cospan.mjs doctor --check`.
-   - Open `chore(release): cospan vX.Y.Z — <headline>` with labels `chore` + affected areas (`core`, `drivers`, `hosts`). Approve gated `Tests (Windows)` CI before merging whenever the release includes runtime, lifecycle, locking, or OS-path changes.
+   - Open `chore(release): cospan vX.Y.Z — <headline>` with labels `chore` + affected areas (`core`, `drivers`, `hosts`, `ADLC`). Approve gated `Tests (Windows)` CI before merging whenever the release includes runtime, lifecycle, locking, or OS-path changes.
 5. **Tag & publish GitHub Release (after merge):**
    - Squash-merge the release PR, fast-forward `master`, and push an annotated tag:
      `git tag -a vX.Y.Z -m "cospan vX.Y.Z" && git push origin vX.Y.Z`

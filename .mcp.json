@@ -4,8 +4,9 @@
     "cospan": {
       "type": "stdio",
       "command": "node",
+      "cwd": "./",
       "args": [
-        "${PLUGIN_ROOT}/src/mcp/cospan-mcp.mjs"
+        "src/mcp/cospan-mcp.mjs"
       ]
     }
   }

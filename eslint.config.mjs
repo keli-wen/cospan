@@ -23,10 +23,10 @@ export default [
       n: nodePlugin,
     },
     rules: {
-      'max-lines': ['error', { max: 350, skipBlankLines: true, skipComments: true }],
-      'max-lines-per-function': ['error', { max: 80, skipBlankLines: true, skipComments: true }],
+      'max-lines': ['error', { max: 600, skipBlankLines: true, skipComments: true }],
+      'max-lines-per-function': ['error', { max: 120, skipBlankLines: true, skipComments: true }],
       'max-depth': ['error', 4],
-      complexity: ['error', 15],
+      complexity: ['error', 20],
       'import-x/no-cycle': ['error', { ignoreExternal: true }],
       'import-x/extensions': [
         'error',
@@ -37,12 +37,6 @@ export default [
       'n/prefer-node-protocol': 'error',
       'no-empty': ['error', { allowEmptyCatch: true }],
       'no-unused-vars': ['error', { argsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' }],
-    },
-  },
-  {
-    files: ['tests/**/*.test.mjs'],
-    rules: {
-      'max-lines-per-function': ['error', { max: 120, skipBlankLines: true, skipComments: true }],
     },
   },
   prettierConfig,

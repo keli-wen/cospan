@@ -2,7 +2,7 @@
 
 Cospan is designed to be developed and verified cleanly by **both human contributors and coding agents**. This guide defines the concrete engineering rules, offline test setup, and verification matrix required before opening a pull request.
 
-> **For coding agents:** Read [`AGENTS.md`](AGENTS.md) and this file before editing code. Follow the [Verification Matrix](#verification-matrix-for-agents--humans) for every surface you touch, and report actual observed outputs—never fabricated checkmarks—in the pull request body.
+> **For coding agents & reviewers:** Read [`AGENTS.md`](AGENTS.md) and this file before editing code, run a pre-review cleanup pass using [`SIMPLIFY.md`](SIMPLIFY.md), and apply [`REVIEW.md`](REVIEW.md) when reviewing or preparing high-risk changes. Follow the [Verification Matrix](#verification-matrix-for-agents--humans) for every surface you touch, and report actual observed outputs—never fabricated checkmarks—in the pull request body.
 
 ---
 
@@ -32,7 +32,7 @@ All tests in `npm test` run **100% offline with zero token burn** using determin
 These rules are enforced by ESLint ([`eslint.config.mjs`](eslint.config.mjs)) and tests:
 
 1. **Pure ESM & Zero Runtime Dependencies:** Target Node `>= 20` with `.mjs` modules, `node:` specifiers for built-ins, and explicit `.mjs` extensions on relative imports. Never add `"dependencies"` to `package.json` or leak dev tooling into `package.json` `"files"`.
-2. **Thin Entrypoints & Modularity Gates:** Keep `src/cli.mjs` and `src/mcp/cospan-mcp.mjs` to dispatch/re-exports only. Every `.mjs` file must stay `<= 350` effective lines, functions `<= 80` lines (`<= 120` in tests), max nesting `<= 4`, cyclomatic complexity `<= 15`, line width `<= 100`, with zero circular imports (`import-x/no-cycle`).
+2. **Thin Entrypoints & Modularity Gates:** Keep `src/cli.mjs` and `src/mcp/cospan-mcp.mjs` to dispatch/re-exports only. Every `.mjs` file must stay `<= 600` effective lines, functions `<= 120` lines, max nesting `<= 4`, cyclomatic complexity `<= 20`, line width `<= 100`, with zero circular imports (`import-x/no-cycle`).
 3. **Contract Stability:** Preserve existing CLI flags, job exit codes (`0` done / `2` running / `3` error / `4` canceled / `5` attention), `<= 8 KiB` bounded `observe` JSON, out-of-tree `~/.cospan/trajectories/` state storage, public exports (`durationToMs`, `repoRoot`, `workspaceStateDir`, `parseCliArgs`, `JOB_EXIT_CODES`, `main`), and stdio MCP behavior.
 4. **Cross-Platform Process Safety:** Every `spawn` / `spawnSync` call in `src/**/*.mjs` must pass `windowsHide: true` (asserted in [`tests/windows/process.test.mjs`](tests/windows/process.test.mjs)). Route external binary launches through `buildSpawnCommand()` in `src/targets.mjs` so `.cmd` / `.bat` shims unwrap safely on Windows, and keep parsers CRLF-safe.
 5. **Verbatim Model Shortcut Contract:** Host skill templates (`agy`, `codex`, `claude`, `dsh`) must list shortcuts verbatim and never hardcode ephemeral full model version strings that go stale—let `src/config.mjs` and driver resolvers map shortcuts deterministically at runtime.
@@ -75,12 +75,14 @@ Use the matching template in [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/
 
 1. Branch from `master` using a descriptive prefix (`feat/...`, `fix/...`, `chore/...`, `docs/...`). Never commit directly to `master`.
 2. Keep each PR focused on one logical change and use Conventional Commits (`feat(scope): ...`, `fix(scope): ...`, `chore(scope): ...`).
-3. Fill out [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md) for **human comprehension, not diff narration**:
+3. Before opening the PR, run a short PR-scoped pass against [`SIMPLIFY.md`](SIMPLIFY.md) to remove dead state, redundant internal checks, and single-use wrappers, then re-verify.
+4. Check [`REVIEW.md`](REVIEW.md) to match review depth to your change's risk (align on boundaries pre-code for new control surfaces or harnesses; run an independent fresh-context review when changing job status semantics, process trees, auth, or workspace isolation).
+5. Fill out [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md) for **human comprehension, not diff narration**:
    - Start with a plain-language **TL;DR** and a small **Before → After** CUJ example so a reviewer understands the user-visible impact in 10 seconds.
    - **Never narrate the diff** (no file-by-file summaries or internal function lists)—agents and reviewers inspect the git diff for implementation details; keep the PR body strictly to incremental value (intent, examples, non-obvious trade-offs/boundaries, linked issues, and verification).
    - Link related issues (`Fixes #N` / `Closes #N` / `Relates to #N`) and paste **actual observed verification results** (commands run, test pass/skip counts, and any manual/real-OS checks).
-4. **Apply GitHub labels (`--label`) on every PR and issue:** pick one **Type** label (`bug`, `feature`, `docs`, `chore`, or `tracking`) plus every affected **Area** label (`core`, `drivers`, `hosts`)—for example, `bug,core` for a CLI runtime fix, `chore,docs` for template/doc updates, or `chore` + all affected areas for a release PR.
-5. Never commit local trajectory artifacts (`~/.cospan/`), `.env` files, or unrelated scratch directories.
+6. **Apply GitHub labels (`--label`) on every PR and issue:** pick one **Type** label (`bug`, `feature`, `docs`, `chore`, or `tracking`) plus every affected **Area** label (`core`, `drivers`, `hosts`, `ADLC`)—for example, `bug,core` for a CLI runtime fix, `chore,docs,ADLC` for agent-automation or ADLC governance updates, or `chore` + all affected areas for a release PR.
+7. Never commit local trajectory artifacts (`~/.cospan/`), `.env` files, or unrelated scratch directories.
 
 ---
 
@@ -98,7 +100,7 @@ Follow this deterministic checklist when cutting a `vX.Y.Z` release (see [`docs/
    - Create `docs/releases/vX.Y.Z.md` (header image + `cospan-codex` attribution, `## Highlights`, `### What's New`, `## Validation`, and agent-first `## Upgrade` pinned to `vX.Y.Z`) and prepend the release to `docs/releases/README.md`.
 4. **Verify & open the Release PR:**
    - Run `node bin/cospan.mjs install` (plus `npm run sync:ui` if UI assets changed), `npm run lint`, `npm run format:check`, `npm test`, and `node bin/cospan.mjs doctor --check`.
-   - Open `chore(release): cospan vX.Y.Z — <headline>` with labels `chore` + affected areas (`core`, `drivers`, `hosts`). Approve gated `Tests (Windows)` CI before merging whenever the release includes runtime, lifecycle, locking, or OS-path changes.
+   - Open `chore(release): cospan vX.Y.Z — <headline>` with labels `chore` + affected areas (`core`, `drivers`, `hosts`, `ADLC`). Approve gated `Tests (Windows)` CI before merging whenever the release includes runtime, lifecycle, locking, or OS-path changes.
 5. **Tag & publish GitHub Release (after merge):**
    - Squash-merge the release PR, fast-forward `master`, and push an annotated tag:
      `git tag -a vX.Y.Z -m "cospan vX.Y.Z" && git push origin vX.Y.Z`

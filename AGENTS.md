@@ -16,12 +16,13 @@
 
 Load only the guide for the phase you are in:
 
-| When you are…                                                             | Read                                                                                                                          |
-| :------------------------------------------------------------------------ | :---------------------------------------------------------------------------------------------------------------------------- |
-| Setting up, running change-surface checks, labeling, or cutting a release | [`CONTRIBUTING.md`](CONTRIBUTING.md)                                                                                          |
-| Trimming diff bloat before review or planning architectural cleanup       | [`SIMPLIFY.md`](SIMPLIFY.md)                                                                                                  |
-| Reviewing a PR (risk depth, core lenses, findings & convergence)          | [`REVIEW.md`](REVIEW.md)                                                                                                      |
-| Filing an issue or writing a human-first PR description                   | [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/) & [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md) |
+| When you are…                                                              | Read                                                                                                                          |
+| :------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------- |
+| Setting up, running change-surface checks, labeling, or cutting a release  | [`CONTRIBUTING.md`](CONTRIBUTING.md)                                                                                          |
+| Writing tests, reusing helpers/fakes, or checking verification blind spots | [`tests/README.md`](tests/README.md)                                                                                          |
+| Trimming diff bloat before review or planning architectural cleanup        | [`SIMPLIFY.md`](SIMPLIFY.md)                                                                                                  |
+| Reviewing a PR (risk depth, core lenses, findings & convergence)           | [`REVIEW.md`](REVIEW.md)                                                                                                      |
+| Filing an issue or writing a human-first PR description                    | [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/) & [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md) |
 
 ## Base Verification Gate
 

@@ -1,38 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-import { apply as applyDshPlugin } from '../dsh/index.mjs';
-import { cancelBoardJob, listWorkspaceBoard } from '../src/sidebar-state.mjs';
-
-const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
-const ROOT_DIR = path.resolve(TEST_DIR, '..');
-const BIN = path.join(ROOT_DIR, 'bin', 'cospan.mjs');
-const FAKE_CODEX = path.join(TEST_DIR, 'fakes', 'fake-codex.mjs');
-
-async function withTwoWorkspaces(fn) {
-  const repoA = fs.mkdtempSync(path.join(os.tmpdir(), 'cospan-dsh-ctl-a-'));
-  const repoB = fs.mkdtempSync(path.join(os.tmpdir(), 'cospan-dsh-ctl-b-'));
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'cospan-dsh-ctl-home-'));
-  spawnSync('git', ['init', '-q', '-c', 'core.fsmonitor=false'], { cwd: repoA });
-  spawnSync('git', ['init', '-q', '-c', 'core.fsmonitor=false'], { cwd: repoB });
-  const prevHome = process.env.COSPAN_HOME;
-  process.env.COSPAN_HOME = home;
-  try {
-    await fn({ repoA, repoB, home });
-  } finally {
-    if (prevHome === undefined) delete process.env.COSPAN_HOME;
-    else process.env.COSPAN_HOME = prevHome;
-    for (const dir of [repoA, repoB, home]) {
-      try {
-        fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-      } catch {}
-    }
-  }
-}
+import { apply as applyDshPlugin } from '../../dsh/index.mjs';
+import { cancelBoardJob, listWorkspaceBoard } from '../../src/sidebar-state.mjs';
+import { ROOT_DIR } from '../helpers/paths.mjs';
+import { loadDshClientModule, runCospanInHome, withTempWorkspaces } from '../helpers/sidebar.mjs';
 
 function mountConnectionFetch(services = {}) {
   let registered = null;
@@ -78,29 +51,24 @@ function postJson(route, body) {
 }
 
 function launchHangingJob(cwd, home, sessionId) {
-  const res = spawnSync(
-    process.execPath,
-    [BIN, 'send', '--to', 'codex', '--json', '--prompt', `Job for ${sessionId}`],
+  const res = runCospanInHome(
+    ['send', '--to', 'codex', '--json', '--prompt', `Job for ${sessionId}`],
     {
       cwd,
-      encoding: 'utf8',
+      home,
       env: {
-        ...process.env,
-        COSPAN_HOME: home,
-        COSPAN_CONFIG_DIR: home,
-        CODEX_BIN: FAKE_CODEX,
         FAKE_CODEX_HANG: '1',
         COSPAN_CALLER_HOST: 'dsh',
         COSPAN_CALLER_SESSION_ID: sessionId,
       },
     }
   );
-  assert.equal(res.status, 0, res.stderr);
+  assert.equal(res.code, 0, res.stderr);
   return JSON.parse(res.stdout).job_id;
 }
 
 test('DSH /api/cospan/ctl registers via connection.fetch and isolates sessions', async () => {
-  await withTwoWorkspaces(async ({ repoA, repoB, home }) => {
+  await withTempWorkspaces(2, async ({ repos: [repoA, repoB], home }) => {
     const jobA = launchHangingJob(repoA, home, 'sess-a');
     const jobB = launchHangingJob(repoB, home, 'sess-b');
     const sessions = new Map([
@@ -141,7 +109,7 @@ test('DSH /api/cospan/ctl registers via connection.fetch and isolates sessions',
       assert.equal(detailRes.status, 200);
       assert.equal((await detailRes.json()).job_id, jobA);
 
-      // Directory-less live session and unknown session must return 404 (never fall back to repoB)
+      // Directory-less and unknown sessions must return 404 (never fall back to repoB)
       const dirlessRes = await postJson(mounted.route, {
         sessionId: 'sess-dirless',
         action: 'list',
@@ -195,34 +163,8 @@ test('DSH client bundle posts to api/cospan/ctl and rejects HTML 200 fallbacks',
 
   let capturedAdapter = null;
   let capturedReq = null;
-  const saved = {
-    window: globalThis.window,
-    document: globalThis.document,
-    fetch: globalThis.fetch,
-  };
-  let loaded = null;
-  let firstRef = true;
+  const saved = { document: globalThis.document, fetch: globalThis.fetch };
   globalThis.document = undefined;
-  globalThis.window = {
-    __ModuleLoader__: {
-      load(def) {
-        loaded = def.factory(() => ({
-          Fragment: 'Fragment',
-          Component: class {},
-          createElement: (type, props, ...children) => ({ type, props, children }),
-          useCallback: (fn) => fn,
-          useRef: (v) => {
-            if (firstRef) {
-              firstRef = false;
-              return { current: { textContent: '' } };
-            }
-            return { current: v };
-          },
-          useEffect: (fn) => fn(),
-        }));
-      },
-    },
-  };
   globalThis.fetch = async (url, init) => {
     capturedReq = { url, init };
     return new Response('<html>fallback</html>', {
@@ -235,7 +177,10 @@ test('DSH client bundle posts to api/cospan/ctl and rejects HTML 200 fallbacks',
   };
   try {
     const stubMount = '(globalThis.__cospanCap(adapter), { destroy() {} })';
-    new Function(clientCode.replace('CospanBoard.mount(node, adapter)', stubMount))();
+    const loaded = loadDshClientModule(
+      clientCode.replace('CospanBoard.mount(node, adapter)', stubMount),
+      { runEffects: true, firstRefCurrent: { textContent: '' } }
+    );
     let SidebarBody = null;
     loaded.apply({
       effect: (fn) => fn(),

@@ -1,9 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { apply as applyDshPlugin } from '../../dsh/index.mjs';
 import { installForAgyHost } from '../../src/installer.mjs';
@@ -15,47 +13,10 @@ import {
 } from '../../src/sidebar-state.mjs';
 import { startSidecarServer } from '../../src/sidecar/server.mjs';
 import { buildDshClientBundle, syncDshClient } from '../../src/ui/sync-dsh-client.mjs';
-import { COSPAN_BIN as BIN, FAKE_FILES, ROOT_DIR } from '../helpers/paths.mjs';
+import { FAKE_FILES, ROOT_DIR } from '../helpers/paths.mjs';
+import { loadDshClientModule, runCospanInHome, withTempWorkspace } from '../helpers/sidebar.mjs';
 
-const { agy: FAKE_AGY, codex: FAKE_CODEX } = FAKE_FILES;
-
-async function withTempWorkspace(fn) {
-  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'cospan-sidebar-'));
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'cospan-sidebar-home-'));
-  spawnSync('git', ['init', '-q'], { cwd: repo });
-  const prevHome = process.env.COSPAN_HOME;
-  process.env.COSPAN_HOME = home;
-  try {
-    await fn({ repo, home });
-  } finally {
-    delete process.env.CODEX_BIN;
-    delete process.env.COSPAN_CONFIG_DIR;
-    delete process.env.FAKE_CODEX_HANG;
-    if (prevHome === undefined) delete process.env.COSPAN_HOME;
-    else process.env.COSPAN_HOME = prevHome;
-    fs.rmSync(repo, { recursive: true, force: true });
-    fs.rmSync(home, { recursive: true, force: true });
-  }
-}
-
-function runCospanInHome(args, { cwd, home, env = {} }) {
-  const r = spawnSync(process.execPath, [BIN, ...args], {
-    cwd,
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      COSPAN_HOME: home,
-      COSPAN_CONFIG_DIR: home,
-      AGY_BIN: FAKE_AGY,
-      CODEX_BIN: FAKE_CODEX,
-      COSPAN_CALLER_HOST: '',
-      COSPAN_CALLER_SESSION_ID: '',
-      ANTIGRAVITY_CONVERSATION_ID: '',
-      ...env,
-    },
-  });
-  return { code: r.status ?? -1, stdout: r.stdout || '', stderr: r.stderr || '' };
-}
+const { codex: FAKE_CODEX } = FAKE_FILES;
 
 test('sidebar-state queries board, caller attribution, legacy jobs, and safe cancel', async () => {
   await withTempWorkspace(async ({ repo, home }) => {
@@ -170,32 +131,7 @@ test('dsh client bundle has zero drift, exposes ./client, and runs /cospan-ctl',
     ]);
 
     // 3. Verify client.js UMD registration via simulated __ModuleLoader__
-    let loadedModule = null;
-    const prevWin = globalThis.window;
-    globalThis.window = {
-      __ModuleLoader__: {
-        load(def) {
-          assert.equal(def.id, 'cospan-dsh');
-          loadedModule = def.factory((modName) => {
-            assert.equal(modName, 'react');
-            return {
-              Fragment: 'Fragment',
-              Component: class {},
-              createElement: (type, props, ...children) => ({ type, props, children }),
-              useCallback: (fn) => fn,
-              useRef: (v) => ({ current: v }),
-              useEffect: () => {},
-            };
-          });
-        },
-      },
-    };
-    try {
-      new Function(diskClient)();
-    } finally {
-      if (prevWin === undefined) delete globalThis.window;
-      else globalThis.window = prevWin;
-    }
+    const loadedModule = loadDshClientModule(diskClient);
     const tabRegs = [];
     const slotRegs = [];
     loadedModule.apply({
@@ -233,14 +169,23 @@ test('dsh client bundle has zero drift, exposes ./client, and runs /cospan-ctl',
     assert.ok(ctl && sendTool, 'expected /cospan-ctl and cospan_send registrations');
 
     const fakeAgent = { session: { id: 'dsh-s42', header: { id: 'dsh-s42', cwd: repo } } };
+    const savedEnv = {
+      CODEX_BIN: process.env.CODEX_BIN,
+      COSPAN_CONFIG_DIR: process.env.COSPAN_CONFIG_DIR,
+      FAKE_CODEX_HANG: process.env.FAKE_CODEX_HANG,
+    };
     process.env.CODEX_BIN = FAKE_CODEX;
     process.env.COSPAN_CONFIG_DIR = home;
     process.env.FAKE_CODEX_HANG = '1';
-    const dshSend = await sendTool.execute(
-      { to: 'codex', prompt: 'DSH task' },
-      { agent: fakeAgent }
-    );
-    delete process.env.FAKE_CODEX_HANG;
+    let dshSend;
+    try {
+      dshSend = await sendTool.execute({ to: 'codex', prompt: 'DSH task' }, { agent: fakeAgent });
+    } finally {
+      for (const [key, val] of Object.entries(savedEnv)) {
+        if (val === undefined) delete process.env[key];
+        else process.env[key] = val;
+      }
+    }
     assert.equal(dshSend.ok, true, dshSend.output);
     const hangId = JSON.parse(dshSend.output).job_id;
 

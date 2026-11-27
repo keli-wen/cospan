@@ -3,7 +3,6 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { callTool, TOOLS } from '../src/mcp/tools.mjs';
 import { cancelBoardJob, listWorkspaceBoard, readBoardJobDetail } from '../src/sidebar-state.mjs';
-import { registerCospanHttpApi } from './http-api.mjs';
 
 const DSH_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(DSH_DIR, '..');
@@ -155,27 +154,104 @@ function ctlJsonResponse(kind, body) {
   return { kind, text: JSON.stringify(body) };
 }
 
-async function dispatchCtlAction(cwd, sessionId, payload) {
+async function runCtlAction(cwd, sessionId, payload) {
   const action = String(payload?.action || 'list').trim();
   if (action === 'list') {
-    return ctlJsonResponse('success', {
+    return {
       ok: true,
-      ...listWorkspaceBoard(cwd, { callerSessionId: sessionId }),
-    });
+      status: 200,
+      body: { ok: true, ...listWorkspaceBoard(cwd, { callerSessionId: sessionId }) },
+    };
   }
   if (action === 'detail') {
     const id = extractCtlJobId(payload);
-    if (!id) return ctlJsonResponse('error', { ok: false, error: 'Detail requires a job id.' });
+    if (!id) {
+      return { ok: false, status: 400, body: { ok: false, error: 'Detail requires a job id.' } };
+    }
     const detail = readBoardJobDetail(cwd, id);
-    return ctlJsonResponse(detail.ok ? 'success' : 'error', detail);
+    return { ok: detail.ok, status: detail.ok ? 200 : 404, body: detail };
   }
   if (action === 'cancel') {
     const id = extractCtlJobId(payload);
-    if (!id) return ctlJsonResponse('error', { ok: false, error: 'Cancel requires a job id.' });
+    if (!id) {
+      return { ok: false, status: 400, body: { ok: false, error: 'Cancel requires a job id.' } };
+    }
     const res = await cancelBoardJob(cwd, id);
-    return ctlJsonResponse(res.ok ? 'success' : 'error', res);
+    const status = res.ok ? 200 : res.status === null ? 404 : 400;
+    return { ok: res.ok, status, body: res };
   }
-  return ctlJsonResponse('error', { ok: false, error: `Unknown /cospan-ctl action "${action}"` });
+  return {
+    ok: false,
+    status: 400,
+    body: { ok: false, error: `Unknown /cospan-ctl action "${action}"` },
+  };
+}
+
+async function dispatchCtlAction(cwd, sessionId, payload) {
+  const res = await runCtlAction(cwd, sessionId, payload);
+  return ctlJsonResponse(res.ok ? 'success' : 'error', res.body);
+}
+
+function normalizeAbsoluteCwd(raw) {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  return trimmed && path.isAbsolute(trimmed) ? trimmed : null;
+}
+
+async function resolveRecordedSessionCwd(ctx, sessionId) {
+  const id = typeof sessionId === 'string' ? sessionId.trim() : '';
+  if (!id) return null;
+  const live = ctx.get?.('sessions')?.get?.(id);
+  const liveCwd = normalizeAbsoluteCwd(live?.header?.cwd);
+  if (liveCwd) return liveCwd;
+  const persistence = ctx.get?.('sessionPersistence');
+  if (typeof persistence?.stat !== 'function') return null;
+  try {
+    const stored = await persistence.stat(id);
+    return normalizeAbsoluteCwd(stored?.header?.cwd);
+  } catch {
+    return null;
+  }
+}
+
+function ctlHttpJson(body, status = 200) {
+  return Response.json(body, { status, headers: { 'cache-control': 'no-store' } });
+}
+
+async function handleCospanCtlFetch(connCtx, req) {
+  let payload;
+  try {
+    payload = await req.json();
+  } catch {
+    return ctlHttpJson({ ok: false, error: 'Invalid JSON request body.' }, 400);
+  }
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return ctlHttpJson({ ok: false, error: 'Request body must be a JSON object.' }, 400);
+  }
+  const sessionId = typeof payload.sessionId === 'string' ? payload.sessionId.trim() : '';
+  if (!sessionId) {
+    return ctlHttpJson({ ok: false, error: 'Missing sessionId.' }, 400);
+  }
+  const cwd = await resolveRecordedSessionCwd(connCtx, sessionId);
+  if (!cwd) {
+    return ctlHttpJson({ ok: false, error: 'Unknown or unresolvable DSH session.' }, 404);
+  }
+  const res = await runCtlAction(cwd, sessionId, payload);
+  return ctlHttpJson(res.body, res.status);
+}
+
+function registerCospanCtlApi(connCtx) {
+  if (typeof connCtx.connection?.fetch?.register !== 'function') return;
+  connCtx.effect(
+    () =>
+      connCtx.connection.fetch.register({
+        path: '/api/cospan/ctl',
+        methods: ['POST'],
+        requestBody: 'buffered',
+        fetch: (req) => handleCospanCtlFetch(connCtx, req),
+      }),
+    'cospan: sidebar control API'
+  );
 }
 
 function registerCospanCtlCommand(cmdCtx) {
@@ -247,8 +323,8 @@ export function apply(ctx) {
     registerCospanCtlCommand(cmdCtx);
   });
 
-  ctx.inject(['webServer'], (webCtx) => {
-    registerCospanHttpApi(webCtx);
+  ctx.inject(['connection'], (connCtx) => {
+    registerCospanCtlApi(connCtx);
   });
 }
 

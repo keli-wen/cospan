@@ -3,12 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { Readable } from 'node:stream';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { apply as applyDshPlugin } from '../dsh/index.mjs';
-import { COSPAN_HTTP_PREFIX, COSPAN_REQUEST_HEADER } from '../dsh/http-api.mjs';
-import { updateState } from '../src/job-store.mjs';
 import { cancelBoardJob, listWorkspaceBoard } from '../src/sidebar-state.mjs';
 
 const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -17,9 +14,9 @@ const BIN = path.join(ROOT_DIR, 'bin', 'cospan.mjs');
 const FAKE_CODEX = path.join(TEST_DIR, 'fakes', 'fake-codex.mjs');
 
 async function withTwoWorkspaces(fn) {
-  const repoA = fs.mkdtempSync(path.join(os.tmpdir(), 'cospan-dsh-http-a-'));
-  const repoB = fs.mkdtempSync(path.join(os.tmpdir(), 'cospan-dsh-http-b-'));
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'cospan-dsh-http-home-'));
+  const repoA = fs.mkdtempSync(path.join(os.tmpdir(), 'cospan-dsh-ctl-a-'));
+  const repoB = fs.mkdtempSync(path.join(os.tmpdir(), 'cospan-dsh-ctl-b-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'cospan-dsh-ctl-home-'));
   spawnSync('git', ['init', '-q', '-c', 'core.fsmonitor=false'], { cwd: repoA });
   spawnSync('git', ['init', '-q', '-c', 'core.fsmonitor=false'], { cwd: repoB });
   const prevHome = process.env.COSPAN_HOME;
@@ -37,60 +34,23 @@ async function withTwoWorkspaces(fn) {
   }
 }
 
-function createMockRequest({
-  method = 'GET',
-  url = '/cospan/board',
-  headers = {},
-  body = null,
-  remoteAddress = '127.0.0.1',
-} = {}) {
-  const payload =
-    body === null || body === undefined
-      ? []
-      : [Buffer.isBuffer(body) ? body : Buffer.from(String(body), 'utf8')];
-  const req = Readable.from(payload);
-  req.method = method;
-  req.url = url;
-  req.headers = Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
-  req.socket = { remoteAddress };
-  return req;
-}
-
-function createMockResponse() {
-  const headers = new Map();
-  let body = '';
-  return {
-    statusCode: 200,
-    setHeader(name, value) {
-      headers.set(String(name).toLowerCase(), value);
-    },
-    getHeader(name) {
-      return headers.get(String(name).toLowerCase());
-    },
-    end(chunk = '') {
-      if (chunk) body += String(chunk);
-    },
-    json() {
-      return body ? JSON.parse(body) : null;
-    },
-  };
-}
-
-function mountDshWebServer(services = {}) {
-  let registeredRoute = null;
-  let routeDisposed = false;
+function mountConnectionFetch(services = {}) {
+  let registered = null;
+  let disposed = false;
   let effectDispose = null;
   applyDshPlugin({
     inject(deps, fn) {
-      if (deps[0] !== 'webServer') return;
+      if (deps[0] !== 'connection') return;
       fn({
         get: (name) => services[name],
-        webServer: {
-          register(route) {
-            registeredRoute = route;
-            return () => {
-              routeDisposed = true;
-            };
+        connection: {
+          fetch: {
+            register(route) {
+              registered = route;
+              return () => {
+                disposed = true;
+              };
+            },
           },
         },
         effect(factory) {
@@ -100,10 +60,21 @@ function mountDshWebServer(services = {}) {
     },
   });
   return {
-    route: registeredRoute,
+    route: registered,
     dispose: () => effectDispose?.(),
-    isDisposed: () => routeDisposed,
+    isDisposed: () => disposed,
   };
+}
+
+function postJson(route, body) {
+  const raw = typeof body === 'string' ? body : JSON.stringify(body);
+  return route.fetch(
+    new Request('http://127.0.0.1/api/cospan/ctl', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: raw,
+    })
+  );
 }
 
 function launchHangingJob(cwd, home, sessionId) {
@@ -128,97 +99,84 @@ function launchHangingJob(cwd, home, sessionId) {
   return JSON.parse(res.stdout).job_id;
 }
 
-test('DSH webServer API serves board/detail/cancel with strict isolation', async () => {
+test('DSH /api/cospan/ctl registers via connection.fetch and isolates sessions', async () => {
   await withTwoWorkspaces(async ({ repoA, repoB, home }) => {
     const jobA = launchHangingJob(repoA, home, 'sess-a');
     const jobB = launchHangingJob(repoB, home, 'sess-b');
-    const sessions = new Map([['sess-a', { id: 'sess-a', header: { cwd: repoA } }]]);
-    const mounted = mountDshWebServer({
+    const sessions = new Map([
+      ['sess-a', { id: 'sess-a', header: { cwd: repoA } }],
+      ['sess-dirless', { id: 'sess-dirless', header: {} }],
+    ]);
+    const mounted = mountConnectionFetch({
       sessions,
-      workingDirectory: { defaultDirectory: repoB, get: (s) => s.header.cwd },
+      // Even if workingDirectory.get falls back to repoB, dirless sessions must NOT read repoB
+      workingDirectory: { defaultDirectory: repoB, get: (s) => s.header?.cwd || repoB },
       sandboxPolicy: { workspaceRoot: repoB },
       sessionPersistence: {
         stat: async (id) => (id === 'sess-b' ? { header: { cwd: repoB } } : undefined),
       },
-      connection: { requestRejection: () => undefined },
     });
 
     try {
-      assert.equal(mounted.route.kind, 'prefix');
-      assert.equal(mounted.route.path, COSPAN_HTTP_PREFIX);
-      const authHeaders = { [COSPAN_REQUEST_HEADER]: '1', host: '127.0.0.1:4096' };
+      assert.equal(mounted.route.path, '/api/cospan/ctl');
+      assert.deepEqual(mounted.route.methods, ['POST']);
+      assert.equal(mounted.route.requestBody, 'buffered');
 
-      const boardRes = createMockResponse();
-      await mounted.route.handler(
-        createMockRequest({ url: '/cospan/board?sessionId=sess-a', headers: authHeaders }),
-        boardRes
-      );
-      assert.equal(boardRes.statusCode, 200);
-      assert.equal(boardRes.getHeader('cache-control'), 'no-store');
-      assert.equal(boardRes.json().jobs[0].id, jobA);
-      assert.equal(boardRes.json().jobs[0].caller_match, true);
+      const listRes = await postJson(mounted.route, { sessionId: 'sess-a', action: 'list' });
+      assert.equal(listRes.status, 200);
+      assert.equal(listRes.headers.get('cache-control'), 'no-store');
+      const listJson = await listRes.json();
+      assert.equal(listJson.jobs[0].id, jobA);
+      assert.equal(listJson.jobs[0].caller_match, true);
 
-      const persistedRes = createMockResponse();
-      await mounted.route.handler(
-        createMockRequest({ url: '/cospan/board?sessionId=sess-b', headers: authHeaders }),
-        persistedRes
-      );
-      assert.equal(persistedRes.statusCode, 200);
-      assert.equal(persistedRes.json().jobs[0].id, jobB);
+      const persistedRes = await postJson(mounted.route, { sessionId: 'sess-b', action: 'list' });
+      assert.equal(persistedRes.status, 200);
+      assert.equal((await persistedRes.json()).jobs[0].id, jobB);
 
-      const detailRes = createMockResponse();
-      await mounted.route.handler(
-        createMockRequest({
-          url: `/cospan/detail?sessionId=sess-a&id=${encodeURIComponent(jobA)}`,
-          headers: authHeaders,
-        }),
-        detailRes
-      );
-      assert.equal(detailRes.statusCode, 200);
-      assert.equal(detailRes.json().job_id, jobA);
+      const detailRes = await postJson(mounted.route, {
+        sessionId: 'sess-a',
+        action: 'detail',
+        id: jobA,
+      });
+      assert.equal(detailRes.status, 200);
+      assert.equal((await detailRes.json()).job_id, jobA);
 
-      // Invalid session must NOT fall back to repoB
-      const invalidCancel = createMockResponse();
-      await mounted.route.handler(
-        createMockRequest({
-          method: 'POST',
-          url: '/cospan/cancel',
-          headers: { ...authHeaders, 'content-type': 'application/json' },
-          body: JSON.stringify({ sessionId: 'unknown-session', id: jobB }),
-        }),
-        invalidCancel
-      );
-      assert.equal(invalidCancel.statusCode, 404);
+      // Directory-less live session and unknown session must return 404 (never fall back to repoB)
+      const dirlessRes = await postJson(mounted.route, {
+        sessionId: 'sess-dirless',
+        action: 'list',
+      });
+      assert.equal(dirlessRes.status, 404);
+      const unknownRes = await postJson(mounted.route, {
+        sessionId: 'unknown-session',
+        action: 'cancel',
+        id: jobB,
+      });
+      assert.equal(unknownRes.status, 404);
 
       // Cross-workspace cancel must fail and leave jobB running
-      const crossCancel = createMockResponse();
-      await mounted.route.handler(
-        createMockRequest({
-          method: 'POST',
-          url: '/cospan/cancel',
-          headers: { ...authHeaders, 'content-type': 'application/json' },
-          body: JSON.stringify({ sessionId: 'sess-a', id: jobB }),
-        }),
-        crossCancel
-      );
-      assert.equal(crossCancel.statusCode, 404);
+      const crossRes = await postJson(mounted.route, {
+        sessionId: 'sess-a',
+        action: 'cancel',
+        id: jobB,
+      });
+      assert.equal(crossRes.status, 404);
       assert.equal(listWorkspaceBoard(repoB).jobs[0].status, 'running');
 
-      // Valid same-workspace cancel succeeds
-      const okCancel = createMockResponse();
-      await mounted.route.handler(
-        createMockRequest({
-          method: 'POST',
-          url: '/cospan/cancel',
-          headers: { ...authHeaders, 'content-type': 'application/json' },
-          body: JSON.stringify({ sessionId: 'sess-a', id: jobA }),
-        }),
-        okCancel
-      );
-      assert.equal(okCancel.statusCode, 200);
-      assert.equal(okCancel.json().status, 'canceled');
+      // Malformed bodies return 400
+      assert.equal((await postJson(mounted.route, 'not-json')).status, 400);
+      assert.equal((await postJson(mounted.route, [])).status, 400);
+      assert.equal((await postJson(mounted.route, { action: 'list' })).status, 400);
 
-      // Route disposal unregisters handler cleanly
+      // Same-workspace cancel succeeds
+      const okCancel = await postJson(mounted.route, {
+        sessionId: 'sess-a',
+        action: 'cancel',
+        id: jobA,
+      });
+      assert.equal(okCancel.status, 200);
+      assert.equal((await okCancel.json()).status, 'canceled');
+
       assert.equal(mounted.isDisposed(), false);
       mounted.dispose();
       assert.equal(mounted.isDisposed(), true);
@@ -229,104 +187,79 @@ test('DSH webServer API serves board/detail/cancel with strict isolation', async
   });
 });
 
-test('DSH webServer API enforces auth, CSRF headers, content-type, and bounds', async () => {
-  await withTwoWorkspaces(async ({ repoA }) => {
-    updateState((s) => {
-      s.jobs.push({ id: 'job-1', target: 'codex', status: 'done' });
-    }, repoA);
-    const sessions = new Map([['sess-a', { id: 'sess-a', header: { cwd: repoA } }]]);
-    const validHeaders = { [COSPAN_REQUEST_HEADER]: '1', host: '127.0.0.1:4096' };
-
-    let rejectionCode = 401;
-    const authMounted = mountDshWebServer({
-      sessions,
-      connection: { requestRejection: () => rejectionCode },
-    });
-    const r401 = createMockResponse();
-    await authMounted.route.handler(
-      createMockRequest({ url: '/cospan/board?sessionId=sess-a', headers: validHeaders }),
-      r401
-    );
-    assert.equal(r401.statusCode, 401);
-    rejectionCode = undefined;
-
-    const noHeader = createMockResponse();
-    await authMounted.route.handler(
-      createMockRequest({ url: '/cospan/board?sessionId=sess-a', headers: { host: '127.0.0.1' } }),
-      noHeader
-    );
-    assert.equal(noHeader.statusCode, 403);
-
-    const crossSite = createMockResponse();
-    await authMounted.route.handler(
-      createMockRequest({
-        url: '/cospan/board?sessionId=sess-a',
-        headers: { ...validHeaders, 'sec-fetch-site': 'cross-site' },
-      }),
-      crossSite
-    );
-    assert.equal(crossSite.statusCode, 403);
-
-    const fallbackMounted = mountDshWebServer({ sessions });
-    const remoteRes = createMockResponse();
-    await fallbackMounted.route.handler(
-      createMockRequest({
-        url: '/cospan/board?sessionId=sess-a',
-        headers: validHeaders,
-        remoteAddress: '10.0.0.5',
-      }),
-      remoteRes
-    );
-    assert.equal(remoteRes.statusCode, 403);
-
-    const badOrigin = createMockResponse();
-    await fallbackMounted.route.handler(
-      createMockRequest({
-        url: '/cospan/board?sessionId=sess-a',
-        headers: { ...validHeaders, origin: 'https://evil.example' },
-      }),
-      badOrigin
-    );
-    assert.equal(badOrigin.statusCode, 403);
-
-    const wrongMethod = createMockResponse();
-    await authMounted.route.handler(
-      createMockRequest({ method: 'POST', url: '/cospan/board', headers: validHeaders }),
-      wrongMethod
-    );
-    assert.equal(wrongMethod.statusCode, 405);
-    assert.equal(wrongMethod.getHeader('allow'), 'GET');
-
-    const badMedia = createMockResponse();
-    await authMounted.route.handler(
-      createMockRequest({
-        method: 'POST',
-        url: '/cospan/cancel',
-        headers: { ...validHeaders, 'content-type': 'text/plain' },
-        body: '{}',
-      }),
-      badMedia
-    );
-    assert.equal(badMedia.statusCode, 415);
-
-    const tooLarge = createMockResponse();
-    await authMounted.route.handler(
-      createMockRequest({
-        method: 'POST',
-        url: '/cospan/cancel',
-        headers: { ...validHeaders, 'content-type': 'application/json' },
-        body: 'x'.repeat(70 * 1024),
-      }),
-      tooLarge
-    );
-    assert.equal(tooLarge.statusCode, 413);
-  });
-});
-
-test('DSH client bundle never calls /cospan-ctl or remote.commands.execute', () => {
+test('DSH client bundle posts to api/cospan/ctl and rejects HTML 200 fallbacks', async () => {
   const clientCode = fs.readFileSync(path.join(ROOT_DIR, 'dsh', 'client.js'), 'utf8');
   assert.doesNotMatch(clientCode, /remote\.commands\.execute/);
   assert.doesNotMatch(clientCode, /\/cospan-ctl/);
-  assert.match(clientCode, /X-Cospan-Request/);
-  assert.match(clientCode, /DSH_IDLE_POLL_MS\s*=\s*30000/);
+  assert.match(clientCode, /['"]api\/cospan\/ctl['"]/);
+
+  let capturedAdapter = null;
+  let capturedReq = null;
+  const saved = {
+    window: globalThis.window,
+    document: globalThis.document,
+    fetch: globalThis.fetch,
+  };
+  let loaded = null;
+  let firstRef = true;
+  globalThis.document = undefined;
+  globalThis.window = {
+    __ModuleLoader__: {
+      load(def) {
+        loaded = def.factory(() => ({
+          Fragment: 'Fragment',
+          Component: class {},
+          createElement: (type, props, ...children) => ({ type, props, children }),
+          useCallback: (fn) => fn,
+          useRef: (v) => {
+            if (firstRef) {
+              firstRef = false;
+              return { current: { textContent: '' } };
+            }
+            return { current: v };
+          },
+          useEffect: (fn) => fn(),
+        }));
+      },
+    },
+  };
+  globalThis.fetch = async (url, init) => {
+    capturedReq = { url, init };
+    return new Response('<html>fallback</html>', {
+      status: 200,
+      headers: { 'content-type': 'text/html' },
+    });
+  };
+  globalThis.__cospanCap = (adapter) => {
+    capturedAdapter = adapter;
+  };
+  try {
+    const stubMount = '(globalThis.__cospanCap(adapter), { destroy() {} })';
+    new Function(clientCode.replace('CospanBoard.mount(node, adapter)', stubMount))();
+    let SidebarBody = null;
+    loaded.apply({
+      effect: (fn) => fn(),
+      sidebarRightTabs: { register: () => {} },
+      sidebarRight: {},
+      slots: {
+        inject: (_s, cb) => cb(),
+        register: (meta, comp) => {
+          if (meta.name === 'sidebar.right.pane.tab') SidebarBody = comp;
+        },
+      },
+    });
+    SidebarBody({ sessionId: 'sess-1' }).children[0].type({ sessionId: 'sess-1' });
+    assert.ok(capturedAdapter);
+    await assert.rejects(() => capturedAdapter.fetchBoard({ scope: 'workspace' }), /non-JSON/i);
+    assert.equal(capturedReq.url, 'api/cospan/ctl');
+    assert.equal(capturedReq.init.method, 'POST');
+    assert.deepEqual(JSON.parse(capturedReq.init.body), {
+      sessionId: 'sess-1',
+      action: 'list',
+      scope: 'workspace',
+    });
+  } finally {
+    delete globalThis.__cospanCap;
+    Object.assign(globalThis, saved);
+  }
 });

@@ -1,4 +1,4 @@
-/* global window, document, fetch, URL, URLSearchParams, AbortController */
+/* global window, document, fetch */
 window.__ModuleLoader__.load({
   id: 'cospan-dsh',
   factory: (require) => {
@@ -12,9 +12,6 @@ window.__ModuleLoader__.load({
     const TAB_ID = 'cospan-dsh';
     const TAB_KIND = 'cospan';
     const STYLE_TAG_ID = 'cospan-dsh/board.css';
-    const DSH_IDLE_POLL_MS = 30000;
-    const COSPAN_API_PREFIX = 'cospan';
-    const COSPAN_REQUEST_HEADER = 'X-Cospan-Request';
 
     const COSPAN_BOARD_CSS = '__COSPAN_BOARD_CSS_PLACEHOLDER__';
 
@@ -209,94 +206,44 @@ window.__ModuleLoader__.load({
       }
     }
 
-    function resolveHostRouteUrl(route, query) {
-      const baseRaw =
-        typeof document !== 'undefined' && typeof document.baseURI === 'string' && document.baseURI
-          ? document.baseURI
-          : typeof window !== 'undefined' && window.location && window.location.href
-            ? window.location.href
-            : 'http://127.0.0.1/';
-      const base = new URL(baseRaw);
-      base.search = '';
-      base.hash = '';
-      if (!base.pathname.endsWith('/')) {
-        base.pathname = `${base.pathname}/`;
+    async function postCospanCtl(sessionId, payload) {
+      if (!sessionId) {
+        return { ok: false, error: 'No active DSH session' };
       }
-      const cleanRoute = String(route || '').replace(/^\/+/, '');
-      const url = new URL(`${COSPAN_API_PREFIX}/${cleanRoute}`, base);
-      if (query) {
-        const params = new URLSearchParams();
-        for (const [key, value] of Object.entries(query)) {
-          if (value !== undefined && value !== null && value !== '') {
-            params.set(key, String(value));
-          }
-        }
-        const qs = params.toString();
-        if (qs) url.search = `?${qs}`;
-      }
-      return url.toString();
-    }
-
-    async function requestCospanApi(route, options) {
-      const opts = options || {};
-      const method = opts.method || 'GET';
-      const url = resolveHostRouteUrl(route, opts.query);
-      const headers = { [COSPAN_REQUEST_HEADER]: '1' };
-      const init = {
-        method,
+      const res = await fetch('api/cospan/ctl', {
+        method: 'POST',
         credentials: 'same-origin',
         cache: 'no-store',
-        headers,
-      };
-      if (opts.signal) init.signal = opts.signal;
-      if (opts.body !== undefined) {
-        headers['Content-Type'] = 'application/json';
-        init.body = JSON.stringify(opts.body);
-      }
-      const res = await fetch(url, init);
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.assign({ sessionId }, payload)),
+      });
       let parsed = null;
       try {
         parsed = await res.json();
       } catch {
-        /* ignore non-JSON error responses */
+        /* ignore non-JSON response */
       }
       if (!res.ok) {
         const msg =
-          (parsed && (parsed.error || parsed.message)) ||
+          (parsed && typeof parsed === 'object' && (parsed.error || parsed.message)) ||
           `Cospan API request failed (HTTP ${res.status})`;
         throw new Error(msg);
       }
-      return parsed || { ok: true };
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('Unexpected non-JSON response from Cospan API');
+      }
+      return parsed;
     }
 
     function createSidebarBody() {
       function CospanSidebarMount(props) {
         const sessionId = (props && props.sessionId) || null;
         const inputActions = (props && props.inputActions) || null;
-        const tabInfo = props && typeof props.useTabInfo === 'function' ? props.useTabInfo() : null;
-        const tabVisible =
-          tabInfo && tabInfo.tab && typeof tabInfo.tab.visible === 'boolean'
-            ? tabInfo.tab.visible
-            : true;
-
         const containerRef = React.useRef(null);
         const sessionRef = React.useRef(sessionId);
-        const visibleRef = React.useRef(tabVisible);
         const inputActionsRef = React.useRef(inputActions);
         inputActionsRef.current = inputActions;
         const listenersRef = React.useRef(new Set());
-        const boardAbortRef = React.useRef(null);
-
-        function abortInFlightBoard() {
-          if (boardAbortRef.current) {
-            try {
-              boardAbortRef.current.abort();
-            } catch {
-              /* ignore */
-            }
-            boardAbortRef.current = null;
-          }
-        }
 
         React.useEffect(() => {
           ensureStyles();
@@ -305,13 +252,8 @@ window.__ModuleLoader__.load({
 
           const adapter = {
             host: 'dsh',
-            idlePollMs: DSH_IDLE_POLL_MS,
             getInitialState() {
-              return {
-                workspaceLabel: '',
-                sessionId: sessionRef.current,
-                visible: visibleRef.current,
-              };
+              return { workspaceLabel: '', sessionId: sessionRef.current };
             },
             subscribe(onUpdate) {
               listenersRef.current.add(onUpdate);
@@ -338,64 +280,31 @@ window.__ModuleLoader__.load({
                   notice: 'Open a conversation session to view workspace tasks.',
                 };
               }
-              abortInFlightBoard();
-              const controller =
-                typeof AbortController === 'function' ? new AbortController() : null;
-              boardAbortRef.current = controller;
-              try {
-                return await requestCospanApi('board', {
-                  method: 'GET',
-                  query: { sessionId: sessionRef.current, scope },
-                  signal: controller ? controller.signal : undefined,
-                });
-              } finally {
-                if (boardAbortRef.current === controller) {
-                  boardAbortRef.current = null;
-                }
-              }
+              return postCospanCtl(sessionRef.current, { action: 'list', scope });
             },
             async fetchDetail(jobId) {
               if (!sessionRef.current) return { ok: false };
-              return requestCospanApi('detail', {
-                method: 'GET',
-                query: { sessionId: sessionRef.current, id: jobId },
-              });
+              return postCospanCtl(sessionRef.current, { action: 'detail', id: jobId });
             },
             async cancelJob(jobId) {
               if (!sessionRef.current) {
                 return { ok: false, message: 'No active DSH session.' };
               }
-              return requestCospanApi('cancel', {
-                method: 'POST',
-                body: { sessionId: sessionRef.current, id: jobId },
-              });
+              return postCospanCtl(sessionRef.current, { action: 'cancel', id: jobId });
             },
           };
 
           const instance = CospanBoard.mount(node, adapter);
-          return () => {
-            abortInFlightBoard();
-            instance.destroy();
-          };
+          return () => instance.destroy();
         }, []);
 
         React.useEffect(() => {
           if (sessionRef.current === sessionId) return;
           sessionRef.current = sessionId;
-          abortInFlightBoard();
           for (const listener of listenersRef.current) {
             listener({ sessionId });
           }
         }, [sessionId]);
-
-        React.useEffect(() => {
-          if (visibleRef.current === tabVisible) return;
-          visibleRef.current = tabVisible;
-          if (!tabVisible) abortInFlightBoard();
-          for (const listener of listenersRef.current) {
-            listener({ visible: tabVisible });
-          }
-        }, [tabVisible]);
 
         return h('div', {
           ref: containerRef,

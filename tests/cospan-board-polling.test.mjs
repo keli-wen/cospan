@@ -15,10 +15,15 @@ function createFakeDom() {
       className: '',
       textContent: '',
       hidden: false,
+      isConnected: true,
+      rects: [{ width: 320, height: 600 }],
       style: {},
       dataset: {},
       children: [],
       parentNode: null,
+      getClientRects() {
+        return node.rects;
+      },
       setAttribute() {},
       addEventListener() {},
       removeEventListener() {},
@@ -79,6 +84,9 @@ function createFakeDom() {
     emit(type) {
       for (const fn of docListeners.get(type) || []) fn();
     },
+    listenerCount(type) {
+      return docListeners.get(type)?.size || 0;
+    },
   };
   return { doc, container: makeEl('div') };
 }
@@ -86,9 +94,11 @@ function createFakeDom() {
 async function withFakeBoardEnv(fn) {
   const { doc, container } = createFakeDom();
   const timeouts = new Map();
+  const observers = [];
   let nextTimerId = 1;
   const saved = {
     document: globalThis.document,
+    IntersectionObserver: globalThis.IntersectionObserver,
     setTimeout: globalThis.setTimeout,
     clearTimeout: globalThis.clearTimeout,
     setInterval: globalThis.setInterval,
@@ -96,6 +106,23 @@ async function withFakeBoardEnv(fn) {
     CospanBoard: globalThis.CospanBoard,
   };
   globalThis.document = doc;
+  globalThis.IntersectionObserver = class FakeIntersectionObserver {
+    constructor(cb) {
+      this.cb = cb;
+      this.disconnected = false;
+      this.observed = [];
+      observers.push(this);
+    }
+    observe(target) {
+      this.observed.push(target);
+    }
+    disconnect() {
+      this.disconnected = true;
+    }
+    trigger(isIntersecting) {
+      if (!this.disconnected) this.cb([{ isIntersecting }]);
+    }
+  };
   globalThis.setTimeout = (cb, ms) => {
     const id = nextTimerId++;
     timeouts.set(id, { cb, ms });
@@ -112,87 +139,74 @@ async function withFakeBoardEnv(fn) {
   const boardSrc = fs.readFileSync(path.join(ROOT_DIR, 'src', 'ui', 'cospan-board.js'), 'utf8');
   new Function(boardSrc)();
   try {
-    await fn({ CospanBoard: globalThis.CospanBoard, doc, container, timeouts });
+    await fn({ CospanBoard: globalThis.CospanBoard, doc, container, timeouts, observers });
   } finally {
     Object.assign(globalThis, saved);
   }
 }
 
-test('CospanBoard preserves default intervals for agy and honors DSH overrides', async () => {
-  await withFakeBoardEnv(async ({ CospanBoard, container, timeouts }) => {
-    let agyJobs = [];
-    const agyBoard = CospanBoard.mount(container, {
-      host: 'agy',
-      getInitialState: () => ({ workspaceLabel: '/repo', sessionId: 'c1' }),
-      fetchBoard: async () => ({ workspace: '/repo', caller_session_id: 'c1', jobs: agyJobs }),
-    });
-    await new Promise((r) => process.nextTick(r));
-    assert.equal([...timeouts.values()].find((t) => !t.interval)?.ms, 8000);
-    agyJobs = [
-      { id: 'j1', target: 'codex', status: 'running', started_at: '2026-01-01T00:00:00Z' },
-    ];
-    await agyBoard.refresh();
-    assert.equal([...timeouts.values()].find((t) => !t.interval)?.ms, 2000);
-    agyBoard.destroy();
-    assert.equal(timeouts.size, 0);
-  });
-});
-
-test('CospanBoard pauses polling on hide and discards stale session responses', async () => {
-  await withFakeBoardEnv(async ({ CospanBoard, doc, container, timeouts }) => {
+test('CospanBoard pauses when hidden/collapsed and resumes via visibility & observer', async () => {
+  await withFakeBoardEnv(async ({ CospanBoard, doc, container, timeouts, observers }) => {
     let notify;
-    const pendingResolvers = [];
+    const pending = [];
     let fetchCount = 0;
-    const dshBoard = CospanBoard.mount(container, {
+    const board = CospanBoard.mount(container, {
       host: 'dsh',
-      idlePollMs: 30000,
-      getInitialState: () => ({ workspaceLabel: '', sessionId: 's1', visible: true }),
+      getInitialState: () => ({ workspaceLabel: '', sessionId: 's1' }),
       subscribe: (cb) => {
         notify = cb;
         return () => {};
       },
       fetchBoard: () => {
         fetchCount += 1;
-        return new Promise((resolve) => pendingResolvers.push(resolve));
+        return new Promise((resolve) => pending.push(resolve));
       },
     });
     assert.equal(fetchCount, 1);
+    assert.equal(observers.length, 1);
 
-    // Hide while fetch #1 is still in-flight: resolving #1 must NOT restart polling
-    notify({ visible: false });
-    pendingResolvers.shift()({ workspace: '/w1', caller_session_id: 's1', jobs: [] });
-    await new Promise((r) => process.nextTick(r));
-    assert.equal(timeouts.size, 0);
-
-    // Re-show triggers fetch #2; switching session triggers #3 and supersedes #2
-    notify({ visible: true });
-    assert.equal(fetchCount, 2);
-    notify({ sessionId: 's2' });
-    assert.equal(fetchCount, 3);
-    const resolveStaleS1 = pendingResolvers.shift();
-    const resolveFreshS2 = pendingResolvers.shift();
-
-    resolveFreshS2({ workspace: '/w2', caller_session_id: 's2', jobs: [] });
-    await new Promise((r) => process.nextTick(r));
-    assert.equal([...timeouts.values()].filter((t) => !t.interval).length, 1);
-    assert.equal([...timeouts.values()].find((t) => !t.interval)?.ms, 30000);
-
-    // Late response from s1 must be discarded without duplicating or resetting timers
-    resolveStaleS1({
-      workspace: '/w1',
-      caller_session_id: 's1',
-      jobs: [{ id: 'stale', target: 'codex', status: 'running' }],
-    });
-    await new Promise((r) => process.nextTick(r));
-    assert.equal([...timeouts.values()].filter((t) => !t.interval).length, 1);
-    assert.equal([...timeouts.values()].find((t) => !t.interval)?.ms, 30000);
-
-    // Hiding the host window pauses polling immediately
+    // Hide document while fetch #1 is in flight and switch session: must NOT stall inFlight
     doc.hidden = true;
     doc.emit('visibilitychange');
+    notify({ sessionId: 's2' });
+    pending.shift()({ workspace: '/w1', caller_session_id: 's1', jobs: [] });
+    await new Promise((r) => process.nextTick(r));
+    assert.equal(timeouts.size, 0);
+    assert.equal(fetchCount, 1);
+
+    // Showing document resumes immediately with fetch #2 and schedules 8s idle poll
+    doc.hidden = false;
+    doc.emit('visibilitychange');
+    assert.equal(fetchCount, 2);
+    pending.shift()({ workspace: '/w2', caller_session_id: 's2', jobs: [] });
+    await new Promise((r) => process.nextTick(r));
+    assert.equal([...timeouts.values()].find((t) => !t.interval)?.ms, 8000);
+
+    // Collapsing sidebar (empty rects + observer not intersecting) pauses polling
+    container.rects = [];
+    observers[0].trigger(false);
     assert.equal(timeouts.size, 0);
 
-    dshBoard.destroy();
+    // Expanding sidebar resumes immediately via IntersectionObserver and uses 2s running poll
+    container.rects = [{ width: 320, height: 600 }];
+    observers[0].trigger(true);
+    assert.equal(fetchCount, 3);
+    pending.shift()({
+      workspace: '/w2',
+      caller_session_id: 's2',
+      jobs: [{ id: 'j1', target: 'codex', status: 'running', started_at: '2026-01-01T00:00:00Z' }],
+    });
+    await new Promise((r) => process.nextTick(r));
+    assert.equal([...timeouts.values()].find((t) => !t.interval)?.ms, 2000);
+
+    // Disconnecting container also prevents polling
+    container.isConnected = false;
+    observers[0].trigger(false);
     assert.equal(timeouts.size, 0);
+
+    board.destroy();
+    assert.equal(timeouts.size, 0);
+    assert.equal(observers[0].disconnected, true);
+    assert.equal(doc.listenerCount('visibilitychange'), 0);
   });
 });

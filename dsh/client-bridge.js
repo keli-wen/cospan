@@ -1,4 +1,4 @@
-/* global window, document */
+/* global window, document, fetch */
 window.__ModuleLoader__.load({
   id: 'cospan-dsh',
   factory: (require) => {
@@ -206,37 +206,36 @@ window.__ModuleLoader__.load({
       }
     }
 
-    async function runCospanCtl(ctx, sessionId, payload) {
-      if (!sessionId || !ctx.remote || !ctx.remote.commands || !ctx.remote.commands.execute) {
+    async function postCospanCtl(sessionId, payload) {
+      if (!sessionId) {
         return { ok: false, error: 'No active DSH session' };
       }
-      const cmdLine = `/cospan-ctl ${JSON.stringify(payload)}`;
-      const res = await ctx.remote.commands.execute(sessionId, cmdLine, []);
-      if (!res || !res.ok) {
-        const msg = (res && res.error && res.error.message) || 'Command execution failed';
+      const res = await fetch('api/cospan/ctl', {
+        method: 'POST',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.assign({ sessionId }, payload)),
+      });
+      let parsed = null;
+      try {
+        parsed = await res.json();
+      } catch {
+        /* ignore non-JSON response */
+      }
+      if (!res.ok) {
+        const msg =
+          (parsed && typeof parsed === 'object' && (parsed.error || parsed.message)) ||
+          `Cospan API request failed (HTTP ${res.status})`;
         throw new Error(msg);
       }
-      if (!res.value || !res.value.result) {
-        throw new Error('Command /cospan-ctl is not registered in this session');
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('Unexpected non-JSON response from Cospan API');
       }
-      const inner = res.value.result;
-      let parsed = null;
-      if (typeof inner.text === 'string' && inner.text.trim()) {
-        try {
-          parsed = JSON.parse(inner.text);
-        } catch {
-          parsed = null;
-        }
-      }
-      if (inner.kind === 'error') {
-        const errMsg =
-          (parsed && (parsed.error || parsed.message)) || inner.text || 'Command error';
-        throw new Error(errMsg);
-      }
-      return parsed || { ok: true };
+      return parsed;
     }
 
-    function createSidebarBody(ctx) {
+    function createSidebarBody() {
       function CospanSidebarMount(props) {
         const sessionId = (props && props.sessionId) || null;
         const inputActions = (props && props.inputActions) || null;
@@ -281,17 +280,17 @@ window.__ModuleLoader__.load({
                   notice: 'Open a conversation session to view workspace tasks.',
                 };
               }
-              return runCospanCtl(ctx, sessionRef.current, { action: 'list', scope });
+              return postCospanCtl(sessionRef.current, { action: 'list', scope });
             },
             async fetchDetail(jobId) {
               if (!sessionRef.current) return { ok: false };
-              return runCospanCtl(ctx, sessionRef.current, { action: 'detail', id: jobId });
+              return postCospanCtl(sessionRef.current, { action: 'detail', id: jobId });
             },
             async cancelJob(jobId) {
               if (!sessionRef.current) {
                 return { ok: false, message: 'No active DSH session.' };
               }
-              return runCospanCtl(ctx, sessionRef.current, { action: 'cancel', id: jobId });
+              return postCospanCtl(sessionRef.current, { action: 'cancel', id: jobId });
             },
           };
 
@@ -324,11 +323,11 @@ window.__ModuleLoader__.load({
       };
     }
 
-    const inject = ['slots', 'sidebarRightTabs', 'sidebarRight', 'remote', 'remote.commands'];
+    const inject = ['slots', 'sidebarRightTabs', 'sidebarRight'];
 
     function apply(ctx) {
       ensureStyles();
-      const SidebarBody = createSidebarBody(ctx);
+      const SidebarBody = createSidebarBody();
       const HeaderAction = createHeaderAction(ctx);
 
       ctx.effect(

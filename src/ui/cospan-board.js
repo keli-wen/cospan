@@ -1,4 +1,4 @@
-/* global document, navigator, localStorage, setTimeout, clearTimeout, setInterval, clearInterval */
+/* global document, navigator, localStorage, IntersectionObserver, setTimeout, clearTimeout, setInterval, clearInterval */
 const CospanBoard = (function () {
   const RUNNING_POLL_MS = 2000;
   const IDLE_POLL_MS = 8000;
@@ -1280,12 +1280,45 @@ const CospanBoard = (function () {
       }
     }
 
+    function isVisible() {
+      if (state.destroyed) return false;
+      if (typeof document !== 'undefined' && document.hidden) return false;
+      if ('isConnected' in container && !container.isConnected) return false;
+      if (
+        typeof container.getClientRects === 'function' &&
+        container.getClientRects().length === 0
+      ) {
+        return false;
+      }
+      return true;
+    }
+
+    function stopTimers() {
+      if (state.pollTimer) {
+        clearTimeout(state.pollTimer);
+        state.pollTimer = null;
+      }
+      if (state.tickTimer) {
+        clearInterval(state.tickTimer);
+        state.tickTimer = null;
+      }
+    }
+
     function scheduleNextPoll() {
-      if (state.pollTimer) clearTimeout(state.pollTimer);
-      if (state.destroyed) return;
+      if (state.pollTimer) {
+        clearTimeout(state.pollTimer);
+        state.pollTimer = null;
+      }
+      if (!isVisible()) {
+        stopTimers();
+        return;
+      }
       const hasRunning = state.jobs.some((j) => j.status === 'running');
       state.pollTimer = setTimeout(
-        () => void refresh(),
+        () => {
+          state.pollTimer = null;
+          void refresh();
+        },
         hasRunning ? RUNNING_POLL_MS : IDLE_POLL_MS
       );
 
@@ -1307,9 +1340,17 @@ const CospanBoard = (function () {
 
     async function refresh() {
       if (state.destroyed || !adapter || !adapter.fetchBoard) return;
+      if (!isVisible()) {
+        stopTimers();
+        return;
+      }
       if (state.inFlight) {
         state.queuedRefresh = true;
         return;
+      }
+      if (state.pollTimer) {
+        clearTimeout(state.pollTimer);
+        state.pollTimer = null;
       }
       state.inFlight = true;
       try {
@@ -1349,10 +1390,11 @@ const CospanBoard = (function () {
       } finally {
         state.inFlight = false;
         if (!state.destroyed) {
-          if (state.queuedRefresh) {
+          if (state.queuedRefresh && isVisible()) {
             state.queuedRefresh = false;
             void refresh();
           } else {
+            state.queuedRefresh = false;
             renderHeaderAndCaps();
             scheduleNextPoll();
           }
@@ -1373,6 +1415,29 @@ const CospanBoard = (function () {
           renderHeaderAndCaps();
         }
       }
+    }
+
+    function onVisibilityChange() {
+      if (state.destroyed) return;
+      if (!isVisible()) {
+        stopTimers();
+      } else if (!state.pollTimer && !state.inFlight) {
+        void refresh();
+      }
+    }
+
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+      document.addEventListener('visibilitychange', onVisibilityChange);
+    }
+    let observer = null;
+    if (typeof IntersectionObserver === 'function') {
+      observer = new IntersectionObserver((entries) => {
+        const last = entries && entries[entries.length - 1];
+        if (!last) return;
+        if (last.isIntersecting) onVisibilityChange();
+        else stopTimers();
+      });
+      observer.observe(container);
     }
 
     const unsubscribe =
@@ -1404,8 +1469,11 @@ const CospanBoard = (function () {
       },
       destroy() {
         state.destroyed = true;
-        if (state.pollTimer) clearTimeout(state.pollTimer);
-        if (state.tickTimer) clearInterval(state.tickTimer);
+        stopTimers();
+        if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
+          document.removeEventListener('visibilitychange', onVisibilityChange);
+        }
+        if (observer) observer.disconnect();
         if (typeof unsubscribe === 'function') unsubscribe();
         container.textContent = '';
       },

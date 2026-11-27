@@ -78,14 +78,46 @@ function formatModelsContractNote(targetId, doc) {
   );
 }
 
-function renderAgyLaunchAndWaitSections(targetId, cmd, doc) {
+function renderAgySubmitAndWait(targetId, cmd, platform = process.platform) {
+  if (platform === 'win32') {
+    return (
+      `\`\`\`powershell\n` +
+      `$jobTimeout = '60m'\n` +
+      `$started = ${cmd} send --json --to ${targetId} --timeout $jobTimeout --prompt '<task>'\n` +
+      `if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n` +
+      `$started\n` +
+      `$jobId = ($started | ConvertFrom-Json -ErrorAction Stop).job_id\n` +
+      `do {\n` +
+      `  ${cmd} wait $jobId --timeout $jobTimeout\n` +
+      `  $rc = $LASTEXITCODE\n` +
+      `} while ($rc -eq 2)\n` +
+      `exit $rc\n` +
+      `\`\`\`\n\n`
+    );
+  }
+  return (
+    `\`\`\`bash\n` +
+    `job_timeout=60m\n` +
+    `started=$(${cmd} send --json --to ${targetId} --timeout "$job_timeout" ` +
+    `--prompt '<task>') || exit $?\n` +
+    `printf '%s\\n' "$started"\n` +
+    `job_id=$(printf '%s\\n' "$started" | ` +
+    `node -e 'const id = JSON.parse(require("node:fs").readFileSync(0, "utf8")).job_id; ` +
+    `if (!id) process.exit(1); console.log(id);') || exit $?\n` +
+    `while true; do\n` +
+    `  rc=0\n` +
+    `  ${cmd} wait "$job_id" --timeout "$job_timeout" || rc=$?\n` +
+    `  [ "$rc" -ne 2 ] && exit "$rc"\n` +
+    `done\n` +
+    `\`\`\`\n\n`
+  );
+}
+
+function renderAgyLaunchAndWaitSections(targetId, cmd, doc, platform = process.platform) {
   return (
     `## 1. Launch (\`send\` vs \`ask\`)\n\n` +
-    `- **Background session (\`send\`, default for any real task or tool-using work):**\n` +
-    `  \`\`\`bash\n` +
-    `  ${cmd} send --to ${targetId} [--readonly] [--restricted] [--raw] \\\n` +
-    `    [--model <id>] [--effort <low|medium|high|xhigh>] [--timeout 60m] --prompt "<task>"\n` +
-    `  \`\`\`\n` +
+    `- **Background session (\`send\`, default for tool-using or long-running work)** ` +
+    `uses the combined command below.\n` +
     `  - **Permissions**: Runs \`unrestricted\` by default so cross-directory reads, builds, ` +
     `and tool caches never stall on OS sandbox prompts. Pass \`--restricted\` (or set ` +
     `\`"permissions": "restricted"\` in \`config.json\`) only when OS sandboxing is explicitly ` +
@@ -104,36 +136,23 @@ function renderAgyLaunchAndWaitSections(targetId, cmd, doc) {
     `  \`\`\`bash\n` +
     `  ${cmd} ask --to ${targetId} --prompt "<short question>"\n` +
     `  \`\`\`\n\n` +
-    `## 2. Antigravity (\`agy\`) Zero-Polling Wait Recipe\n\n` +
-    `After \`send\` prints \`Job <id> started\`, collect it using Antigravity's native ` +
-    `background task wakeup—**never poll in a loop**:\n\n` +
-    `1. Run \`send\` with \`run_command\` (\`WaitMsBeforeAsync: 5000\`) ` +
-    `to capture \`<job-id>\`.\n` +
-    `2. Immediately launch \`wait\` with \`WaitMsBeforeAsync: 500\` so Antigravity backgrounds ` +
-    `the wait task:\n` +
-    `   \`\`\`bash\n` +
-    `   ${cmd} wait <job-id> --timeout 30m\n` +
-    `   # Or batch WaitAll across multiple parallel jobs (allSettled barrier):\n` +
-    `   ${cmd} wait <id1> <id2> --timeout 30m\n` +
-    `   \`\`\`\n` +
-    `   - **Batch vs. separate \`wait\`:**\n` +
-    `     - **Batch (\`wait id1 id2 ...\`):** use when the next step needs all parallel ` +
-    `outputs together (e.g., merging multi-module reviews or validating parallel subtasks ` +
-    `together)—wakes the host only once.\n` +
-    `     - **Separate (\`wait id1\` & \`wait id2\`):** use when parallel jobs are independent ` +
-    `with uneven runtimes (e.g., 2 min vs. 15 min) and you want to act on whichever finishes ` +
-    `first.\n` +
-    `3. **End your turn (call no more tools)** unless you have genuinely independent local ` +
-    `work to do first. Antigravity will automatically wake you as soon as \`wait\` exits with ` +
-    `the deliverable output!\n` +
-    `4. Exit codes of \`wait\`: \`0\` = done (stdout has the full report), \`2\` = still running ` +
-    `(launch \`wait\` again; batch timeout emits bounded <= 8 KiB status JSON without ` +
-    `duplicating completed bodies), \`3\` = error, \`4\` = canceled, \`5\` = timed out with a ` +
-    `resumable session (ask the user before continuing).\n\n`
+    `## 2. Submit and wait in one Antigravity command\n\n` +
+    `Run the entire block in one workspace \`run_command\` call with \`WaitMsBeforeAsync: 500\`. ` +
+    `This keeps the worker and \`wait\` in the same execution context. Set the timeout once ` +
+    `and pass the requested model, effort, access and permissions on the submission line.\n\n` +
+    renderAgySubmitAndWait(targetId, cmd, platform) +
+    `For parallel work, submit all jobs in the same call, collect their JSON job IDs and ` +
+    `pass them to one \`wait <id1> <id2>\`. For independent jobs, use a complete ` +
+    `submit-and-wait call per job.\n\n` +
+    `The loop re-waits automatically while \`wait\` returns \`2\` (still running) so a worker ` +
+    `finishing cleanup right at its timeout still records its final status, and exits as soon ` +
+    `as \`wait\` returns \`0\` (done), \`3\` (failure), \`4\` (canceled), or \`5\` (timeout with ` +
+    `a resumable session). Antigravity wakes the session when the command exits. Use a timeout ` +
+    `that covers the job budget.\n\n`
   );
 }
 
-export function renderAgyHostTargetSkill({ targetId, cospanBin }) {
+export function renderAgyHostTargetSkill({ targetId, cospanBin, platform = process.platform }) {
   const doc = TARGET_DOCS[targetId];
   const cmd = cliCommandPrefix(cospanBin);
   const selfNote =
@@ -162,16 +181,12 @@ export function renderAgyHostTargetSkill({ targetId, cospanBin }) {
     `rely on hidden role personas—state what you want inspected, reviewed, or changed directly ` +
     `in \`--prompt\`, and choose workspace write intent explicitly (\`--readonly\` vs default ` +
     `writable).\n\n` +
-    renderAgyLaunchAndWaitSections(targetId, cmd, doc) +
+    renderAgyLaunchAndWaitSections(targetId, cmd, doc, platform) +
     `## 3. Multi-Turn Continuation & Result Discipline\n\n` +
-    `- **Follow up in the exact same ${targetId} session:**\n` +
-    `  \`\`\`bash\n` +
-    `  ${cmd} continue --id <job-id> --prompt "<delta follow-up instructions>"\n` +
-    `  # or resume the latest finished ${targetId} job in this workspace:\n` +
-    `  ${cmd} continue --last --to ${targetId} --prompt "<delta follow-up instructions>"\n` +
-    `  \`\`\`\n` +
-    `  (Send only the delta instruction rather than restating the whole prior prompt; ` +
-    `collect the new linked job ID with \`wait\`.)\n` +
+    `- **Follow up in the same ${targetId} session** using the combined command above. Replace ` +
+    `the submission with \`continue --json --id <job-id> --prompt "<delta>"\` (or use ` +
+    `\`--last --to ${targetId}\` in place of \`--id <job-id>\`). ` +
+    `Wait for the new ID in the same call.\n` +
     `- **Bounded progress peek (<= 8 KiB JSON with \`phase\` & \`touched_files\`, ` +
     `only if the user asks mid-flight):**\n` +
     `  \`\`\`bash\n` +
@@ -198,16 +213,14 @@ export function renderAgyHostJobsSkill({ cospanBin }) {
     `# cospan-jobs (Antigravity Host Protocol)\n\n` +
     `Manage detached \`cospan\` jobs and trajectories recorded for the current workspace ` +
     `(stored out-of-tree under \`~/.cospan/trajectories/\`):\n\n` +
-    `- \`${cmd} wait <id...> --timeout 30m\` — run via \`run_command\` with ` +
-    `\`WaitMsBeforeAsync: 500\` and stop calling tools so Antigravity wakes you on completion ` +
-    `(pass multiple IDs for a pure WaitAll barrier when all parallel outputs are needed ` +
-    `together; use separate \`wait\` calls when runtimes are uneven and you want to act on ` +
-    `whichever finishes first).\n` +
+    `- For new tasks and continuations, use the target skill’s combined submit-and-wait ` +
+    `command. Run \`${cmd} wait <id...> --timeout 30m\` from the execution context that ` +
+    `started the workers.\n` +
     `- \`${cmd} observe <id>\` — immediate <= 8 KiB JSON activity snapshot with \`phase\` and ` +
     `\`touched_files\` (never consumes \`result\`).\n` +
     `- \`${cmd} result <id>\` — print stored deliverable of a completed job.\n` +
-    `- \`${cmd} continue (--id <id> | --last [--to <target>]) --prompt "..."\` — resume the ` +
-    `recorded target session in a linked job.\n` +
+    `- To resume a recorded session, use \`continue --json\` as the submission step in the ` +
+    `target skill’s combined command.\n` +
     `- \`${cmd} cancel <id>\` — terminate a running worker and its descendant process group ` +
     `safely.\n` +
     `- \`${cmd} status [id]\` — list recent jobs or inspect one job record.\n` +

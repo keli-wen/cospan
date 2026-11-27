@@ -1,30 +1,18 @@
 import { cliCommandPrefix } from './installer-templates.mjs';
 
-function renderAgyDispatchBlock(cospanBin) {
-  const cmd = cliCommandPrefix(cospanBin);
+function renderAgyDispatchBlock() {
   return (
     `## 1. Dispatch & Zero-Polling Wait (Antigravity Host)\n\n` +
     `- **Writable access required**: Omit \`--readonly\` so Codex can copy the generated PNG ` +
     `from \`$CODEX_HOME/generated_images/<thread_id>/\` to your destination path.\n` +
     `- **Reasoning effort**: Pass \`--effort low\` (or \`medium\` at most)—image generation ` +
     `does not benefit from \`high\`/\`xhigh\` reasoning overhead.\n` +
-    `- **Launch & collect without polling**:\n` +
-    `  \`\`\`bash\n` +
-    `  # 1) Launch detached job (WaitMsBeforeAsync: 5000)\n` +
-    `  ${cmd} send --to codex --effort low --timeout 10m --prompt '$imagegen <spec>. ` +
-    `Use built-in image_gen without asking for confirmation, copy the final PNG to ` +
-    `"<abs-output-path>", and report the saved path.'\n\n` +
-    `  # 2) Background wait immediately (WaitMsBeforeAsync: 500), then end turn\n` +
-    `  ${cmd} wait <job-id> --timeout 10m\n` +
-    `  \`\`\`\n` +
-    `- **Multi-turn refinement in the same visual thread (\`continue\`)**:\n` +
-    `  Codex's built-in \`image_gen\` edit mode operates on images already present in the ` +
-    `conversation context. Refine a generated output in-place via \`continue\`:\n` +
-    `  \`\`\`bash\n` +
-    `  ${cmd} continue --id <job-id> --effort low --timeout 10m \\\n` +
-    `    --prompt 'Keep <invariants> unchanged; change only <delta>; ` +
-    `copy the updated PNG to "<abs-v2-path>".'\n` +
-    `  \`\`\`\n\n`
+    `- **Launch and collect** using the combined command in section 2 of the parent skill. ` +
+    `Set the timeout to 10m and add \`--effort low\` to the submission. Prefix the prompt with ` +
+    `\`$imagegen\` in single quotes (or pass \`--prompt-file\`) so the shell keeps \`$imagegen\` ` +
+    `literal, and specify the absolute destination for the final PNG.\n` +
+    `- **Refine in the same visual thread** using \`continue --json --id <job-id>\` in the ` +
+    `combined command. Specify what to preserve, the change, and the new output path.\n\n`
   );
 }
 
@@ -57,7 +45,7 @@ function renderMcpDispatchBlock(cospanBin) {
 
 export function renderCodexDrawReference({ hostMode = 'agy', cospanBin } = {}) {
   const dispatchSection =
-    hostMode === 'agy' ? renderAgyDispatchBlock(cospanBin) : renderMcpDispatchBlock(cospanBin);
+    hostMode === 'agy' ? renderAgyDispatchBlock() : renderMcpDispatchBlock(cospanBin);
 
   return (
     `# Raster Image Generation & Editing via Codex (\`$imagegen\`)\n\n` +

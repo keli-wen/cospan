@@ -13,6 +13,7 @@ import {
   workspaceStateDir,
 } from '../../src/cli.mjs';
 import { installForAgyHost, installForCodexHost } from '../../src/installer.mjs';
+import { renderAgyHostTargetSkill } from '../../src/installer-templates.mjs';
 import { TARGET_MODEL_SHORTCUTS } from '../../src/config.mjs';
 import { listWorkspaceBoard } from '../../src/sidebar-state.mjs';
 import { apply as applyDshPlugin } from '../../dsh/index.mjs';
@@ -82,16 +83,156 @@ function assertAgyDrawReference(agyPluginDir) {
   );
   assert.match(agyCodexSkill, /references\/draw\.md/);
   assert.match(agyCodexSkill, /only when explicitly requested via Codex/i);
-  assert.match(agyCodexSkill, /Batch vs\. separate `wait`/);
+  assert.match(agyCodexSkill, /pass them to one `wait <id1> <id2>`/);
   const agyDraw = fs.readFileSync(
     path.join(agyPluginDir, 'skills', 'cospan-codex', 'references', 'draw.md'),
     'utf8'
   );
   assert.match(agyDraw, /\$imagegen/);
+  assert.match(agyDraw, /single quotes/i);
   assert.match(agyDraw, /--effort low/);
-  assert.match(agyDraw, /continue --id/);
+  assert.match(agyDraw, /continue --json --id/);
+  assert.match(agyDraw, /combined command in section 2 of the parent skill/);
   assert.match(agyDraw, /Explicit opt-in only/);
 }
+
+function extractAgySubmitWaitBlock(skillText, shell) {
+  const block = skillText.split('## 2. Submit and wait in one Antigravity command')[1];
+  return block.split('```' + shell + '\n')[1].split('```')[0];
+}
+
+function writeAgyStubCli(tmp) {
+  const stubBin = path.join(tmp, 'stub-cospan.mjs');
+  fs.writeFileSync(
+    stubBin,
+    [
+      'import fs from "node:fs";',
+      'const args = process.argv.slice(2);',
+      'const state = JSON.parse(fs.readFileSync(process.env.STUB_STATE, "utf8"));',
+      'state.calls.push(args);',
+      'if (args[0] === "send") {',
+      '  fs.writeFileSync(process.env.STUB_STATE, JSON.stringify(state));',
+      '  if (state.sendExit !== 0) process.exit(state.sendExit);',
+      '  console.log(JSON.stringify({ job_id: "job-123" }));',
+      '  process.exit(0);',
+      '}',
+      'if (args[0] === "wait") {',
+      '  const code = state.waitCodes.shift() ?? 0;',
+      '  fs.writeFileSync(process.env.STUB_STATE, JSON.stringify(state));',
+      '  if (code === 5) console.log("timed out resumable");',
+      '  process.exit(code);',
+      '}',
+      'process.exit(1);',
+    ].join('\n')
+  );
+  return stubBin;
+}
+
+function assertAgySubmitWaitBehavior({ cmd, args, stateFile }) {
+  fs.writeFileSync(stateFile, JSON.stringify({ sendExit: 7, waitCodes: [], calls: [] }));
+  const failRun = spawnSync(cmd, args, {
+    env: { ...process.env, STUB_STATE: stateFile },
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  assert.equal(failRun.status, 7);
+  assert.equal(JSON.parse(fs.readFileSync(stateFile, 'utf8')).calls.length, 1);
+
+  fs.writeFileSync(stateFile, JSON.stringify({ sendExit: 0, waitCodes: [2, 2, 5], calls: [] }));
+  const okRun = spawnSync(cmd, args, {
+    env: { ...process.env, STUB_STATE: stateFile },
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  assert.equal(okRun.status, 5);
+  assert.match(
+    okRun.stdout.replaceAll('\r\n', '\n'),
+    /^\{"job_id":"job-123"\}\ntimed out resumable/
+  );
+  const recorded = JSON.parse(fs.readFileSync(stateFile, 'utf8')).calls;
+  assert.equal(recorded.length, 4);
+  assert.ok(recorded[0].includes('$imagegen test prompt'));
+  assert.deepEqual(
+    recorded.slice(1).map((c) => c.slice(0, 2)),
+    [
+      ['wait', 'job-123'],
+      ['wait', 'job-123'],
+      ['wait', 'job-123'],
+    ]
+  );
+}
+
+test('AGY submit-and-wait template covers both OS shells and loops wait exit 2', () => {
+  const linuxSkill = renderAgyHostTargetSkill({
+    targetId: 'codex',
+    cospanBin: '/fake/cospan.mjs',
+    platform: 'linux',
+  });
+  const bashCmd = extractAgySubmitWaitBlock(linuxSkill, 'bash');
+  assert.match(bashCmd, /--prompt '<task>'/);
+  assert.match(bashCmd, /printf '%s\\n' "\$started"/);
+  assert.match(bashCmd, /while true; do/);
+  assert.match(bashCmd, /\[ "\$rc" -ne 2 \] && exit "\$rc"/);
+
+  const winSkill = renderAgyHostTargetSkill({
+    targetId: 'codex',
+    cospanBin: 'C:/fake/cospan.mjs',
+    platform: 'win32',
+  });
+  const psCmd = extractAgySubmitWaitBlock(winSkill, 'powershell');
+  assert.match(psCmd, /--prompt '<task>'/);
+  assert.match(psCmd, /\$started\n\$jobId =/);
+  assert.match(psCmd, /\} while \(\$rc -eq 2\)\nexit \$rc/);
+
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cospan-agy-tpl-'));
+  try {
+    const stubBin = writeAgyStubCli(tmp);
+    const stateFile = path.join(tmp, 'state.json');
+
+    if (process.platform !== 'win32') {
+      const renderedBash = extractAgySubmitWaitBlock(
+        renderAgyHostTargetSkill({ targetId: 'codex', cospanBin: stubBin, platform: 'linux' }),
+        'bash'
+      ).replace("'<task>'", "'$imagegen test prompt'");
+      assertAgySubmitWaitBehavior({ cmd: 'bash', args: ['-c', renderedBash], stateFile });
+    }
+
+    const psScript = path.join(tmp, 'submit-wait.ps1');
+    const renderedPs = extractAgySubmitWaitBlock(
+      renderAgyHostTargetSkill({ targetId: 'codex', cospanBin: stubBin, platform: 'win32' }),
+      'powershell'
+    ).replace("'<task>'", "'$imagegen test prompt'");
+    fs.writeFileSync(psScript, renderedPs);
+
+    const psArgs = [
+      '-NoProfile',
+      '-NonInteractive',
+      ...(process.platform === 'win32' ? ['-ExecutionPolicy', 'Bypass'] : []),
+      '-File',
+      psScript,
+    ];
+    if (process.platform === 'win32') {
+      assertAgySubmitWaitBehavior({
+        cmd: 'powershell.exe',
+        args: psArgs,
+        stateFile,
+      });
+    }
+    const hasPwsh =
+      spawnSync('pwsh', ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.Major'], {
+        windowsHide: true,
+      }).status === 0;
+    if (hasPwsh) {
+      assertAgySubmitWaitBehavior({
+        cmd: 'pwsh',
+        args: psArgs,
+        stateFile,
+      });
+    }
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
+});
 
 test('host installer mounts all detected targets and adheres to host schemas', async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cospan-install-'));
@@ -130,6 +271,15 @@ test('host installer mounts all detected targets and adheres to host schemas', a
         'utf8'
       );
       assertVerbatimSkillContract(agySkill, id);
+      assert.match(agySkill, /one workspace `run_command` call with `WaitMsBeforeAsync: 500`/);
+      const block = agySkill.split('## 2. Submit and wait in one Antigravity command')[1];
+      const shell = process.platform === 'win32' ? 'powershell' : 'bash';
+      const command = block.split('```' + shell + '\n')[1].split('```')[0];
+      assert.match(
+        command,
+        new RegExp('send --json --to ' + id + ' .*\\n[\\s\\S]*job_id[\\s\\S]*wait ')
+      );
+      assert.match(agySkill, /continue --json --id/);
     }
     assertAgyDrawReference(agyRes.pluginDir);
 
